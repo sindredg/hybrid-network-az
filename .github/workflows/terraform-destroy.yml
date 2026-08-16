@@ -7,6 +7,10 @@ permissions:
   id-token: write
   contents: read
 
+concurrency:
+  group: terraform-state
+  cancel-in-progress: false
+
 jobs:
   terraform-destroy:
     name: 'Destroy Infrastructure'
@@ -28,6 +32,8 @@ jobs:
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.0"
 
       - name: Terraform Init
         run: |
