@@ -50,8 +50,9 @@ resource "azurerm_public_ip" "vpn_pip" {
   name                = "pip-vpn-${each.key}"
   location            = local.location
   resource_group_name = azurerm_resource_group.rg.name
-  allocation_method   = "Static"   # Required for Standard SKU
-  sku                 = "Standard" # Forces Azure to use Standard instead of Basic
+  allocation_method   = "Static"
+  sku                 = "Standard"
+  zones               = ["1", "2", "3"] # <--- Required for AZ-skus
 }
 
 # On-Prem VPN Gateway
