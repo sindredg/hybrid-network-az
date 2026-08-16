@@ -31,7 +31,7 @@ variable "admin_ssh_public_key" {
 }
 
 variable "vm_size" {
-  description = "B1s keeps trial vCPU quota usage minimal."
+  description = "B2as_v2 has capacity in Sweden Central where B1s is restricted."
   type        = string
-  default     = "Standard_B1s"
+  default     = "Standard_B2as_v2"
 }
