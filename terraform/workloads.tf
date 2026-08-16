@@ -33,10 +33,11 @@ resource "azurerm_network_interface" "vm" {
   location            = local.location
   resource_group_name = azurerm_resource_group.rg.name
 
-  ip_configuration {
+    ip_configuration {
     name                          = "internal"
     subnet_id                     = azurerm_subnet.subnet[each.value.subnet_key].id
-    private_ip_address_allocation = "Dynamic"
+    private_ip_address_allocation = "Static"
+    private_ip_address            = each.value.private_ip
   }
 }
 
@@ -68,7 +69,7 @@ resource "azurerm_linux_virtual_machine" "vm" {
   }
 }
 
-# Basic SKU reaches peered VNets, which covers the spoke. It can't reach the
+# Basic SKU reaches peered VNets, which covers the spoke. It cant reach the
 # on-prem VNet over the tunnel: which needs IP-based connection, a Standard feature.
 resource "azurerm_public_ip" "bastion" {
   count               = var.deploy_workloads ? 1 : 0
@@ -84,9 +85,7 @@ resource "azurerm_bastion_host" "hub" {
   name                = "bastion-hub"
   location            = local.location
   resource_group_name = azurerm_resource_group.rg.name
-  sku                 = "Standard"
-  ip_connect_enabled  = true # reach vm-onprem by IP over the tunnel
-  tunneling_enabled   = true # native client, so no browser terminal
+  sku                 = "Basic"
 
   ip_configuration {
     name                 = "configuration"
