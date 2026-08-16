@@ -62,7 +62,7 @@ locals {
   gateway_networks = { for k, v in local.networks : k => v if v.has_gateway }
 
   # Compute is opt-in. An empty map means the VM loops produce nothing.
-   workload_vms = var.deploy_workloads ? {
+  workload_vms = var.deploy_workloads ? {
     onprem = { name = "vm-onprem", subnet_key = "onprem-snet-onprem-workloads", private_ip = "192.168.1.4" }
     spoke  = { name = "vm-spoke", subnet_key = "spoke-snet-spoke-workloads", private_ip = "10.1.0.4" }
   } : {}
