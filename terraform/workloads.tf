@@ -84,7 +84,9 @@ resource "azurerm_bastion_host" "hub" {
   name                = "bastion-hub"
   location            = local.location
   resource_group_name = azurerm_resource_group.rg.name
-  sku                 = "Basic"
+  sku                 = "Standard"
+  ip_connect_enabled  = true # reach vm-onprem by IP over the tunnel
+  tunneling_enabled   = true # native client, so no browser terminal
 
   ip_configuration {
     name                 = "configuration"
