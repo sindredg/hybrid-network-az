@@ -1,12 +1,15 @@
 name: 'Terraform Deploy - Hybrid Network Azure Lab'
 
 on:
-  push:
-    branches:
-      - main
+  # 1. Gives us a manual "Run workflow" button in GitHub Actions
+  workflow_dispatch:
+
+  # 2. Automatically runs a safe "terraform plan" when you open a PR (no applies)
   pull_request:
     branches:
       - main
+    paths:
+      - 'terraform/**' # Only triggers if files inside the terraform folder change
 
 # Required for OIDC Authentication with Azure
 permissions:
