@@ -12,3 +12,26 @@ variable "vpn_shared_key" {
   type      = string
   sensitive = true
 }
+
+variable "deploy_workloads" {
+  description = "Deploy test VMs and Bastion. Off by default so compute is opt-in."
+  type        = bool
+  default     = false
+}
+
+variable "admin_username" {
+  type    = string
+  default = "azureuser"
+}
+
+variable "admin_ssh_public_key" {
+  description = "Public key for VM access. Required when deploy_workloads is true."
+  type        = string
+  default     = ""
+}
+
+variable "vm_size" {
+  description = "B1s keeps trial vCPU quota usage minimal."
+  type        = string
+  default     = "Standard_B1s"
+}

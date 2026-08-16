@@ -27,6 +27,8 @@ env:
   ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
   ARM_USE_OIDC: true
   TF_VAR_vpn_shared_key: ${{ secrets.VPN_SHARED_KEY }}
+  TF_VAR_admin_ssh_public_key: ${{ secrets.VM_SSH_PUBLIC_KEY }}
+  TF_VAR_deploy_workloads: true
 
 jobs:
   terraform:

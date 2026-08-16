@@ -22,3 +22,8 @@ output "tunnel_status_command" {
   description = "Checks whether the tunnel is actually up."
   value       = "az network vpn-connection show -n ${azurerm_virtual_network_gateway_connection.onprem_to_hub.name} -g ${azurerm_resource_group.rg.name} --query connectionStatus -o tsv"
 }
+
+output "vm_private_ips" {
+  description = "Workload VM addresses, for the cross-tunnel test."
+  value       = { for k, v in azurerm_linux_virtual_machine.vm : k => v.private_ip_address }
+}
