@@ -46,11 +46,12 @@ resource "azurerm_virtual_network_peering" "spoke_to_hub" {
 
 # Public IPs for VPN Gateways
 resource "azurerm_public_ip" "vpn_pip" {
-  for_each            = { onprem = "onprem", hub = "hub" }
+  for_each            = local.networks
   name                = "pip-vpn-${each.key}"
-  location            = azurerm_resource_group.rg.location
+  location            = local.location
   resource_group_name = azurerm_resource_group.rg.name
-  allocation_method   = "Dynamic"
+  allocation_method   = "Static" # Required for Standard SKU
+  sku                 = "Standard" # Forces Azure to use Standard instead of Basic
 }
 
 # On-Prem VPN Gateway
