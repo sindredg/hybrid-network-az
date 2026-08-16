@@ -1,8 +1,12 @@
 name: 'Terraform Deploy - Hybrid Network Azure Lab'
 
 on:
-  # 1. Gives us a manual "Run workflow" button in GitHub Actions
   workflow_dispatch:
+    inputs:
+      deploy_workloads:
+        description: 'Deploy test VMs and Bastion'
+        type: boolean
+        default: false
 
   # 2. Automatically runs a safe "terraform plan" when you open a PR (no applies)
   pull_request:
@@ -28,7 +32,7 @@ env:
   ARM_USE_OIDC: true
   TF_VAR_vpn_shared_key: ${{ secrets.VPN_SHARED_KEY }}
   TF_VAR_admin_ssh_public_key: ${{ secrets.VM_SSH_PUBLIC_KEY }}
-  TF_VAR_deploy_workloads: true
+  TF_VAR_deploy_workloads: ${{ inputs.deploy_workloads || false }}
 
 jobs:
   terraform:
