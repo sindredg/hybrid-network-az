@@ -60,4 +60,34 @@ locals {
 
   # The spoke has no gateway. Looping over all networks is what created pip-vpn-spoke.
   gateway_networks = { for k, v in local.networks : k => v if v.has_gateway }
+
+  # Compute is opt-in. An empty map means the VM loops produce nothing.
+  workload_vms = var.deploy_workloads ? {
+    onprem = { name = "vm-onprem", subnet_key = "onprem-snet-onprem-workloads" }
+    spoke  = { name = "vm-spoke", subnet_key = "spoke-snet-spoke-workloads" }
+  } : {}
+
+  # NSGs are free, so they exist whether or not the VMs do.
+  # The deny-all rule overrides the default AllowVnetInBound, which otherwise
+  # permits everything from peered VNets and across the tunnel.
+  network_security_groups = {
+    onprem-workloads = {
+      subnet_key = "onprem-snet-onprem-workloads"
+      rules = [
+        { name = "allow-ssh-from-spoke", priority = 100, protocol = "Tcp", port = "22", source = "10.1.0.0/16" },
+        { name = "allow-icmp-from-spoke", priority = 110, protocol = "Icmp", port = "*", source = "10.1.0.0/16" },
+        { name = "deny-all-inbound", priority = 4096, protocol = "*", port = "*", source = "*", access = "Deny" },
+      ]
+    }
+    spoke-workloads = {
+      subnet_key = "spoke-snet-spoke-workloads"
+      rules = [
+        { name = "allow-ssh-from-bastion", priority = 100, protocol = "Tcp", port = "22", source = "10.0.2.0/24" },
+        { name = "allow-ssh-from-onprem", priority = 110, protocol = "Tcp", port = "22", source = "192.168.0.0/16" },
+        { name = "allow-icmp-from-onprem", priority = 120, protocol = "Icmp", port = "*", source = "192.168.0.0/16" },
+        { name = "deny-all-inbound", priority = 4096, protocol = "*", port = "*", source = "*", access = "Deny" },
+      ]
+    }
+  }
+
 }
