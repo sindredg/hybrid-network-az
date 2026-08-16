@@ -61,7 +61,7 @@ resource "azurerm_virtual_network_gateway" "onprem_gw" {
   resource_group_name = azurerm_resource_group.rg.name
   type                = "Vpn"
   vpn_type            = "RouteBased"
-  sku                 = "VpnGw1"
+  sku                 = "VpnGw1AZ" # <--- Updated to AZ SKU
 
   ip_configuration {
     name                          = "vnetGatewayConfig"
@@ -78,7 +78,7 @@ resource "azurerm_virtual_network_gateway" "hub_gw" {
   resource_group_name = azurerm_resource_group.rg.name
   type                = "Vpn"
   vpn_type            = "RouteBased"
-  sku                 = "VpnGw1"
+  sku                 = "VpnGw1AZ" # <--- Updated to AZ SKU
 
   ip_configuration {
     name                          = "vnetGatewayConfig"
