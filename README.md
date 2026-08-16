@@ -7,15 +7,15 @@ An Azure hub-and-spoke network with a simulated on-premises site, defined entire
 ## Target architecture
 
 ```mermaid
-flowchart LR
+flowchart TB
     subgraph OP["vnet-onprem 192.168.0.0/16<br/>simulated datacenter"]
-        direction TB
+        direction LR
         OGW["GatewaySubnet<br/>vgw-onprem"]
         OVM["snet-onprem-workloads<br/>test VM + DNS server<br/>phase 2 and 5"]
     end
 
     subgraph HUB["vnet-hub 10.0.0.0/16<br/>shared services"]
-        direction TB
+        direction LR
         HGW["GatewaySubnet<br/>vgw-hub"]
         HFW["AzureFirewallSubnet<br/>Azure Firewall Standard<br/>phase 3"]
         HBA["AzureBastionSubnet<br/>Bastion<br/>phase 2"]
@@ -24,7 +24,7 @@ flowchart LR
     end
 
     subgraph SP["vnet-spoke 10.1.0.0/16<br/>workload"]
-        direction TB
+        direction LR
         SVM["snet-spoke-workloads<br/>test VM + managed identity<br/>phase 2 and 4"]
         SPL["snet-privatelink<br/>private endpoint<br/>phase 4"]
     end
