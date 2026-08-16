@@ -1,0 +1,56 @@
+name: 'Terraform Deploy - Hybrid Network Azure Lab'
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+# Required for OIDC Authentication with Azure
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  ARM_USE_OIDC: true
+  VPN_SHARED_KEY: ${{ secrets.VPN_SHARED_KEY }} # Automatically picked up by Terraform!
+
+jobs:
+  terraform:
+    name: 'Terraform'
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ./terraform
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: "1.9.0" # Use your preferred version
+
+    - name: Terraform Init (Partial Backend Config)
+      run: |
+        terraform init \
+          -backend-config="resource_group_name=${{ secrets.TF_STATE_RG }}" \
+          -backend-config="storage_account_name=${{ secrets.TF_STATE_SA }}"
+
+    - name: Terraform Format Check
+      run: terraform fmt -check
+
+    - name: Terraform Plan
+      run: terraform plan -out=tfplan
+
+    # Only apply if pushing/merging to main branch (not on pull requests)
+    - name: Terraform Apply
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      run: terraform apply -auto-approve tfplan
