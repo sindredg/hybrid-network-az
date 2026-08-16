@@ -16,6 +16,11 @@ permissions:
   id-token: write
   contents: read
 
+# One state blob, one run at a time. Shared group with the destroy workflow.
+concurrency:
+  group: terraform-state
+  cancel-in-progress: false
+
 env:
   ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
   ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
@@ -53,7 +58,7 @@ jobs:
     - name: Terraform Plan
       run: terraform plan -out=tfplan
 
-    # Only apply if pushing/merging to main branch (not on pull requests)
+    # Must name an event that appears in the on: block above.
     - name: Terraform Apply
-      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      if: github.event_name == 'workflow_dispatch'
       run: terraform apply -auto-approve tfplan
