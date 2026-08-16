@@ -62,9 +62,9 @@ locals {
   gateway_networks = { for k, v in local.networks : k => v if v.has_gateway }
 
   # Compute is opt-in. An empty map means the VM loops produce nothing.
-  workload_vms = var.deploy_workloads ? {
-    onprem = { name = "vm-onprem", subnet_key = "onprem-snet-onprem-workloads" }
-    spoke  = { name = "vm-spoke", subnet_key = "spoke-snet-spoke-workloads" }
+   workload_vms = var.deploy_workloads ? {
+    onprem = { name = "vm-onprem", subnet_key = "onprem-snet-onprem-workloads", private_ip = "192.168.1.4" }
+    spoke  = { name = "vm-spoke", subnet_key = "spoke-snet-spoke-workloads", private_ip = "10.1.0.4" }
   } : {}
 
   # NSGs are free, so they exist whether or not the VMs do.
@@ -76,7 +76,6 @@ locals {
       rules = [
         { name = "allow-ssh-from-spoke", priority = 100, protocol = "Tcp", port = "22", source = "10.1.0.0/16" },
         { name = "allow-icmp-from-spoke", priority = 110, protocol = "Icmp", port = "*", source = "10.1.0.0/16" },
-        { name = "allow-ssh-from-bastion", priority = 120, protocol = "Tcp", port = "22", source = "10.0.2.0/24" },
         { name = "deny-all-inbound", priority = 4096, protocol = "*", port = "*", source = "*", access = "Deny" },
       ]
     }
