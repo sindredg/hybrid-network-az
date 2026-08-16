@@ -1,45 +1,73 @@
 # Azure Hybrid Network Lab
 
-An Azure hub-and-spoke network with a simulated on-premises site, defined entirely in Terraform and deployed from GitHub Actions with no stored Azure credentials.
+An Azure hub-and-spoke network with a simulated on-premises site, defined in Terraform and deployed from GitHub Actions.
 
+It is built to demonstrate and explore three main things:
+
+- **Hybrid connectivity.** An IPsec tunnel joining an on-prem datacenter to an Azure hub-network, with a spoke-network in Azure that reaches the on-prem DC through the hub's gateway, and viceversa. Verified by effective-route lookup and real traffic, not just a "green"-status.
+- **Keyless delivery.** OIDC federation into Entra ID, so no Azure credential exists in this repository. Remote state, and applies that only run when a person deliberately presses the "deploy"-button in GitHub Actions.
+- **Security that is measured.** Subnet NSGs that override Azure's defaults, checked rule by rule with `test-ip-flow` rather than assumed from the config.
+
+**Status: phase 2 of 5 complete.** Firewall, routing, private endpoints and DNS are coming up next.
 ---
 
-## Target architecture
+## Target Architecture
 
 ```mermaid
 flowchart TB
-    subgraph OP["vnet-onprem 192.168.0.0/16<br/>simulated datacenter"]
+    subgraph OP["vnet-onprem<br/>192.168.0.0/16<br/>simulated datacenter"]
         direction LR
         OGW["GatewaySubnet<br/>vgw-onprem"]
-        OVM["snet-onprem-workloads<br/>test VM + DNS server<br/>phase 2 and 5"]
+        OVM["snet-onprem-workloads<br/>vm-onprem"]
     end
 
-    subgraph HUB["vnet-hub 10.0.0.0/16<br/>shared services"]
+    subgraph HUB["vnet-hub<br/>10.0.0.0/16<br/>shared services"]
         direction LR
         HGW["GatewaySubnet<br/>vgw-hub"]
-        HFW["AzureFirewallSubnet<br/>Azure Firewall Standard<br/>phase 3"]
-        HBA["AzureBastionSubnet<br/>Bastion<br/>phase 2"]
-        HDI["snet-dns-inbound /28<br/>resolver inbound 10.0.3.4<br/>phase 5"]
-        HDO["snet-dns-outbound /28<br/>resolver outbound<br/>phase 5"]
+        HBA["AzureBastionSubnet<br/>bastion-hub"]
+        HFW["AzureFirewallSubnet<br/>Azure Firewall<br/>phase 3"]
+        HDN["snet-dns-inbound /28<br/>snet-dns-outbound /28<br/>DNS Private Resolver<br/>phase 5"]
     end
 
-    subgraph SP["vnet-spoke 10.1.0.0/16<br/>workload"]
+    subgraph SP["vnet-spoke<br/>10.1.0.0/16<br/>workload"]
         direction LR
-        SVM["snet-spoke-workloads<br/>test VM + managed identity<br/>phase 2 and 4"]
-        SPL["snet-privatelink<br/>private endpoint<br/>phase 4"]
+        SVM["snet-spoke-workloads<br/>vm-spoke"]
+        SPL["snet-privatelink<br/>private endpoint to Key Vault<br/>phase 4"]
     end
-
-    KV["Key Vault<br/>public access disabled<br/>phase 4"]
 
     OGW <-->|"IPsec tunnel"| HGW
     HUB -->|"peering, gateway transit"| SP
     SP -->|"peering, remote gateways"| HUB
     SVM -.->|"UDR forces inspection<br/>phase 3"| HFW
-    OVM -.->|"UDR return path<br/>phase 3"| HFW
-    SPL ---|"private link"| KV
-    OVM -.->|"resolves privatelink<br/>across the tunnel<br/>phase 5"| HDI
-    HDO -.->|"conditional forward<br/>to on-prem DNS<br/>phase 5"| OVM
+    OVM -.->|"resolves privatelink<br/>across the tunnel<br/>phase 5"| HDN
 
-    classDef planned stroke-dasharray: 5 5
-    class OVM,HFW,HBA,HDI,HDO,SVM,SPL,KV planned
+    classDef built stroke:#2da44e,stroke-width:2px
+    classDef planned stroke:#8b949e,stroke-width:1px,stroke-dasharray:4 4,color:#8b949e
+    class OGW,OVM,HGW,HBA,SVM built
+    class HFW,HDN,SPL planned
+    linkStyle 0 stroke-width:3px
 ```
+
+Green is deployed. Dashed grey is planned, tagged with the phase that adds it.
+
+Three non-overlapping ranges, chosen so the simulated datacenter looks nothing like the Azure side. Neither VM has a public IP; access is through Bastion. The spoke has no gateway on its own, which is the point of the network topology: one gateway in the hub that serves every spoke.
+
+---
+
+## Documentation
+
+| Document | What is in it |
+|---|---|
+| [plan.md](plan.md) | The five phases, what is done, and what is deliberately not being built |
+| [docs/worklog.md](docs/worklog.md) | What was built and in what order, with the evidence |
+| [docs/decisions.md](docs/decisions.md) | Fourteen decisions as questions, each with what it was chosen over and what it gives up |
+| [docs/troubleshooting.md](docs/troubleshooting.md) | Ten failures grouped by phase, with the real error, the root cause and the fix |
+| [docs/terraform-patterns.md](docs/terraform-patterns.md) | The map, flatten and for_each pattern, and where it leaks |
+
+The troubleshooting log is the one worth reading. Four of the ten were Azure withdrawing something that only failed at apply time, and two had error messages that named the wrong layer entirely.
+
+---
+
+## Stack
+
+Azure (Sweden Central), Terraform with the AzureRM provider, GitHub Actions, Entra ID workload identity federation, Azure RBAC custom roles.
