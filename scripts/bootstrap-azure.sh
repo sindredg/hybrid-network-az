@@ -79,33 +79,48 @@ az role assignment create \
 echo "--- 4. Configuring OIDC Federated Credentials for GitHub ---"
 APP_OBJECT_ID=$(az ad app show --id "${APP_ID}" --query id -o tsv)
 
-# Main Branch Credential
-cat <<EOF > /tmp/fed-cred-main.json
+add_fed_cred() {
+  cat <<EOF > /tmp/fed-cred.json
 {
-  "name": "gh-actions-main",
+  "name": "$1",
   "issuer": "https://token.actions.githubusercontent.com",
-  "subject": "repo:${GITHUB_ORG}/${GITHUB_REPO}:ref:refs/heads/main",
-  "description": "GitHub Actions main branch execution",
+  "subject": "$2",
+  "description": "$3",
   "audiences": ["api://AzureADTokenExchange"]
 }
 EOF
-
-az ad app federated-credential create --id "${APP_OBJECT_ID}" --parameters /tmp/fed-cred-main.json || true
-rm -f /tmp/fed-cred-main.json
-
-# Pull Request Credential
-cat <<EOF > /tmp/fed-cred-pr.json
-{
-  "name": "gh-actions-pr",
-  "issuer": "https://token.actions.githubusercontent.com",
-  "subject": "repo:${GITHUB_ORG}/${GITHUB_REPO}:pull_request",
-  "description": "GitHub Actions pull request validation",
-  "audiences": ["api://AzureADTokenExchange"]
+  if az ad app federated-credential create --id "${APP_OBJECT_ID}" \
+       --parameters /tmp/fed-cred.json --output none 2>/dev/null; then
+    echo "  added   $1 -> $2"
+  else
+    echo "  skipped $1 (already exists)"
+  fi
+  rm -f /tmp/fed-cred.json
 }
-EOF
 
-az ad app federated-credential create --id "${APP_OBJECT_ID}" --parameters /tmp/fed-cred-pr.json || true
-rm -f /tmp/fed-cred-pr.json
+# Name-based subjects, used by repos created before 2026-07-15.
+add_fed_cred "gh-actions-main" \
+  "repo:${GITHUB_ORG}/${GITHUB_REPO}:ref:refs/heads/main" "main branch, name-based"
+add_fed_cred "gh-actions-pr" \
+  "repo:${GITHUB_ORG}/${GITHUB_REPO}:pull_request" "pull request, name-based"
+
+# Immutable subjects embed numeric owner and repo IDs so a recycled name cannot inherit trust.
+REPO_ID=""
+OWNER_ID=""
+if command -v gh >/dev/null 2>&1; then
+  REPO_ID=$(gh api "repos/${GITHUB_ORG}/${GITHUB_REPO}" --jq '.id' 2>/dev/null || true)
+  OWNER_ID=$(gh api "repos/${GITHUB_ORG}/${GITHUB_REPO}" --jq '.owner.id' 2>/dev/null || true)
+fi
+
+if [ -n "${REPO_ID}" ] && [ -n "${OWNER_ID}" ]; then
+  IMMUTABLE="repo:${GITHUB_ORG}@${OWNER_ID}/${GITHUB_REPO}@${REPO_ID}"
+  add_fed_cred "gh-actions-main-immutable" \
+    "${IMMUTABLE}:ref:refs/heads/main" "main branch, immutable"
+  add_fed_cred "gh-actions-pr-immutable" \
+    "${IMMUTABLE}:pull_request" "pull request, immutable"
+else
+  echo "  WARNING: could not read repo and owner IDs. Run 'gh auth login' and re-run."
+fi
 
 echo "--- 5. Creating Azure Storage Account for Remote State ---"
 az group create --name "${RG_STATE_NAME}" --location "${LOCATION}" --output none
