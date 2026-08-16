@@ -1,17 +1,30 @@
-# Azure Hybrid Network Lab
+# Azure Hub-and-Spoke Network with on-premises Network Integration
 
-An Azure hub-and-spoke network with a simulated on-premises site, defined in Terraform and deployed from GitHub Actions.
+An Azure hub-and-spoke network with a (simulated) on-premises site, defined in Terraform and
+deployed from GitHub Actions.
+
+Built one layer at a time, to work out how the pieces behave rather than shipping a finished
+topology. Each phase adds one mechanism, gets exercised until it makes sense, with
+reasoning and failures written down before the next phase starts.
 
 It is built to demonstrate and explore three main things:
 
-- **Hybrid connectivity.** An IPsec tunnel joining an on-prem datacenter to an Azure hub-network, with a spoke-network in Azure that reaches the on-prem DC through the hub's gateway, and viceversa. Verified by effective-route lookup and real traffic, not just a "green"-status.
-- **Keyless delivery.** OIDC federation into Entra ID, so no Azure credential exists in this repository. Remote state, and applies that only run when a person deliberately presses the "deploy"-button in GitHub Actions.
-- **Security that is measured.** Subnet NSGs that override Azure's defaults, checked rule by rule with `test-ip-flow` rather than assumed from the config.
+- **Hybrid connectivity.** An IPsec tunnel joining an on-prem datacenter to an Azure hub
+  network, with a spoke network in Azure that reaches the on-prem DC through the hub's
+  gateway, and vice versa. Verified by effective-route lookup and real traffic, not just a
+  "green" status.
+- **Keyless delivery.** OIDC federation into Entra ID, so no Azure credential exists in this
+  repository. Remote state, and applies that only run when a person deliberately presses the
+  "deploy" button in GitHub Actions.
+- **Security mechanics.** Subnet NSGs that override Azure's defaults, checked rule by rule
+  with `test-ip-flow` rather than assumed from the config.
 
-**Status: phase 2 of 5 complete.** Firewall, routing, private endpoints and DNS are coming up next.
+Phases 0 to 2 are built. Firewall and forced routing, private endpoints, then cross-premises
+DNS resolution come next. Nothing gets built before the thing it depends on can be exercised.
+
 ---
 
-## Target Architecture
+## Architecture
 
 ```mermaid
 flowchart TB
