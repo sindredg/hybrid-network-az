@@ -20,6 +20,18 @@ resource "azurerm_subnet" "subnet" {
   resource_group_name  = azurerm_resource_group.rg.name
   virtual_network_name = azurerm_virtual_network.vnet[each.value.vnet_key].name
   address_prefixes     = [each.value.address_prefix]
+
+  # Only the DNS resolver subnets set this.
+  dynamic "delegation" {
+    for_each = each.value.delegation == null ? [] : [each.value.delegation]
+    content {
+      name = "delegation"
+      service_delegation {
+        name    = delegation.value
+        actions = ["Microsoft.Network/virtualNetworks/subnets/join/action"]
+      }
+    }
+  }
 }
 
 # Hub to Spoke Peering
@@ -46,7 +58,7 @@ resource "azurerm_virtual_network_peering" "spoke_to_hub" {
 
 # Public IPs for VPN Gateways
 resource "azurerm_public_ip" "vpn_pip" {
-  for_each            = local.networks
+  for_each            = local.gateway_networks
   name                = "pip-vpn-${each.key}"
   location            = local.location
   resource_group_name = azurerm_resource_group.rg.name
