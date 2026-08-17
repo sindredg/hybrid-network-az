@@ -1,26 +1,36 @@
-# Azure Hub-and-Spoke Network with on-premises Network Integration
+# Azure Private Hybrid Network
 
-An Azure hub-and-spoke network with a (simulated) on-premises site, defined in Terraform and
-deployed from GitHub Actions.
+Three private Azure networks in separate address spaces, joined by an encrypted IPsec tunnel
+and VNet peering, with shared services centralised in a hub and no public exposure on any
+workload.
 
-Built one layer at a time, to work out how the pieces behave rather than shipping a finished
-topology. Each phase adds one mechanism, gets exercised until it makes sense, with
-reasoning and failures written down before the next phase starts.
+This is the pattern for connecting two private networks that do not implicitly trust each
+other: an on-prem datacenter reaching into Azure, two separate cloud estates, or a company
+you have just acquired. Here `vnet-onprem` plays the datacenter role, but the mechanics are
+identical whichever it is.
 
-It is built to demonstrate and explore three main things:
+Built with Terraform and deployed from GitHub Actions.
 
-- **Hybrid connectivity.** An IPsec tunnel joining an on-prem datacenter to an Azure hub
-  network, with a spoke network in Azure that reaches the on-prem DC through the hub's
-  gateway, and vice versa. Verified by effective-route lookup and real traffic, not just a
-  "green" status.
+## What it does
+
+- **Encrypted connectivity between separate address domains.** An IPsec tunnel between two
+  VPN gateways, plus VNet peering with gateway transit, so the spoke reaches across the
+  tunnel through the hub's gateway instead of paying for one of its own.
+- **Centralised inspection.** A firewall in the hub with user-defined routes that force
+  traffic through it, rather than letting the peering carry it straight past. Nothing moves
+  between networks uninspected.
+- **No public exposure.** No workload has a public IP. Admin access goes through Bastion,
+  PaaS is reached over private endpoints instead of public service endpoints, and egress
+  leaves through the firewall rather than Azure's default SNAT.
+- **Name resolution across the boundary.** A DNS Private Resolver so private names resolve
+  in both directions, which is the part that usually breaks in hybrid setups.
 - **Keyless delivery.** OIDC federation into Entra ID, so no Azure credential exists in this
-  repository. Remote state, and applies that only run when a person deliberately presses the
+  repository. Remote state, and applies that only run when someone deliberately presses the
   "deploy" button in GitHub Actions.
-- **Security mechanics.** Subnet NSGs that override Azure's defaults, checked rule by rule
-  with `test-ip-flow` rather than assumed from the config.
 
-Phases 0 to 2 are built. Firewall and forced routing, private endpoints, then cross-premises
-DNS resolution come next. Nothing gets built before the thing it depends on can be exercised.
+Built in phases, each one exercised before the next starts. Phases 0 to 2 are deployed and
+validated; the firewall, private endpoints and DNS resolver are next. The diagram below marks
+which is which.
 
 ---
 

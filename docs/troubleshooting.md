@@ -11,7 +11,7 @@ Grouped by the phase they were hit in. Phase numbering follows [plan.md](../plan
 | # | Phase | Symptom | Root cause | Status |
 |---|---|---|---|---|
 | [1](#1-terraform-init-hangs-forever) | 1 | `terraform init` hangs at "Initializing the backend" | Two concurrent runs racing for the state lock | Fixed |
-| [2](#2-oidc-subject-mismatch-aadsts700213) | 1 | `AADSTS700213` on login | GitHub's immutable subject format does not match the federated credential | Fixed manually, script not updated |
+| [2](#2-oidc-subject-mismatch-aadsts700213) | 1 | `AADSTS700213` on login | GitHub's immutable subject format does not match the federated credential | Fixed |
 | [3](#3-basic-sku-public-ip-blocked) | 1 | `IPv4BasicSkuPublicIpCountLimitReached` | Azure no longer allows Basic SKU public IPs | Fixed |
 | [4](#4-terraform-fmt--check-exits-3) | 1 | `terraform fmt -check` exits 3 | Formatting drift, partly invisible characters from pasted code | Fixed |
 | [5](#5-non-az-gateway-sku-rejected) | 1 | `NonAzSkusNotAllowedForVPNGateway` | Non-AZ gateway SKUs retired | Fixed |
@@ -58,19 +58,15 @@ Cancelling the stuck runs in the Actions UI released the lease. Worth noting tha
 
 Then `azure/login@v2` was added as an explicit step before `terraform init`. That separates authentication from initialisation, so a credential problem now fails in its own step with its own error rather than looking like a backend hang.
 
-**Still outstanding**
-
-Nothing prevents this recurring. A concurrency group on the workflow would make a second run queue instead of collide:
+**Guarded against in Phase 0.** Both workflows now share a concurrency group, so a second run queues instead of colliding:
 
 ```yaml
 concurrency:
-  group: terraform-${{ github.ref }}
+  group: terraform-state
   cancel-in-progress: false
 ```
 
-`cancel-in-progress: false` is the important half. Cancelling an in-flight apply is how the stale-lock version of this problem happens.
-
-Tracked as item 0.6 in [plan.md](../plan.md).
+`cancel-in-progress: false` is the important half. Cancelling an in-flight apply is how the stale-lock version of this problem happens. The group name is shared deliberately, so an apply and a destroy cannot overlap either.
 
 **Lesson**
 
@@ -127,22 +123,21 @@ The fix itself is one field, pasted verbatim out of the error message:
 
 That is the useful trick here: the error prints the subject GitHub actually sent. Copy it rather than trying to construct it. Subject matching is an exact string comparison, so a single character off fails identically to being completely wrong.
 
-One practical note on retrying. Use the re-run button on the failed run rather than pushing an empty commit. Nothing in the repository changed, only the Azure-side configuration, and pushing again risks the concurrent-run problem from item 1.
+One practical note on retrying, and it only applies when the fix was outside the repository. Here nothing in the repo changed, only Azure-side configuration, so the re-run button is right and pushing an empty commit would risk the concurrent-run problem from item 1. When the fix is a file change, re-run is wrong: it replays the original commit and your change is not in it.
 
 ![GitHub Actions re-run jobs menu](images/github-actions-rerun-menu.png)
 
 ![Re-run all jobs confirmation dialog with the failed Terraform job listed](images/github-actions-rerun-dialog.png)
 
-**Still outstanding**
+**Fixed properly in Phase 0.** The portal edit only patched the running setup; the script would have recreated a broken credential on the next run. It now reads the numeric IDs and writes both subject formats, so either token matches:
 
-`scripts/bootstrap-azure.sh:87` and `:101` still write the old name-based format. Re-running the script on a new repository will create a credential that cannot work.
+```bash
+REPO_ID=$(gh api "repos/${GITHUB_ORG}/${GITHUB_REPO}" --jq '.id')
+OWNER_ID=$(gh api "repos/${GITHUB_ORG}/${GITHUB_REPO}" --jq '.owner.id')
+IMMUTABLE="repo:${GITHUB_ORG}@${OWNER_ID}/${GITHUB_REPO}@${REPO_ID}"
+```
 
-Two ways to fix it properly:
-
-- Look up the numeric IDs (`gh api repos/OWNER/REPO --jq .id` and `.owner.id`) and build the subject from them
-- Or move to a flexible federated identity credential using claims matching expressions, which lets one credential match on `repository_id` rather than needing an exact subject string
-
-Tracked as item 0.7 in [plan.md](../plan.md).
+Four federated credentials instead of two: `main` and `pull_request`, each in name-based and immutable form. Azure allows up to 20 per app, so the redundancy is free.
 
 **Reference**
 
