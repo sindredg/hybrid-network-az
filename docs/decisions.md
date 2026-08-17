@@ -1,6 +1,8 @@
 # Decisions
 
-Why this lab is built the way it is.
+Why this lab is built the way it is. Each entry answers one question: what was chosen, what it was chosen over, and what it gives up.
+
+Kept short on purpose. The value is in the reasoning, not the ceremony.
 
 ---
 
@@ -12,7 +14,7 @@ Why this lab is built the way it is.
 
 **Why:** real hardware is not available, and a software VPN appliance adds a VM, its patching, its NSG rules and a class of debugging that has nothing to do with the topology being learned. VNet-to-VNet uses the same gateways, the same IPsec, the same pre-shared key and the same routing behaviour as site-to-site. What it skips is the on-premises equipment configuration.
 
-**Trade-off:** it is not literally site-to-site, but a simulation and the README says so. There is no local network gateway resource, no BGP peering with on-premises equipment, and no exposure to the part that goes wrong most often in reality, which is the far-end device. The address space was deliberately chosen to look like a datacenter range so the routing behaviour stays realistic.
+**Trade-off:** it is not literally site-to-site, and the README says so. There is no local network gateway resource, no BGP peering with on-premises equipment, and no exposure to the part that goes wrong most often in reality, which is the far-end device. The address space was deliberately chosen to look like a datacenter range so the routing behaviour stays realistic.
 
 **Status:** accepted, with the caveat documented.
 
@@ -42,7 +44,7 @@ Why this lab is built the way it is.
 
 **Trade-off:** the failure mode is worse when it breaks. A wrong secret gives a clear authentication error. A subject mismatch gives `AADSTS700213`, which means nothing until you understand what a subject claim is. This bit hard once, and it is written up in [troubleshooting.md](troubleshooting.md#2-oidc-subject-mismatch-aadsts700213).
 
-**Status:** accepted. The bootstrap script still needs updating for GitHub's immutable subject format, tracked in [plan.md](../plan.md).
+**Status:** accepted. The bootstrap script now writes both subject formats, so a fresh run produces credentials that work either way.
 
 ---
 
@@ -100,9 +102,9 @@ Why this lab is built the way it is.
 
 **Trade-off:** deployment is no longer automatic, so `main` can be ahead of what is actually running in Azure. For a lab that is the right way round. For a production system it would need drift detection.
 
-**Known bug from this change:** the apply step's `if` still checks for `github.event_name == 'push'`, left over from the old design. Since push is no longer a trigger, the step never executes and the job still reports success. Item 0.1 in [plan.md](../plan.md).
+**Bug this change introduced:** the apply step's `if` was left checking for `github.event_name == 'push'`. With push gone as a trigger the step could never run, and the job still reported success. Fixed in Phase 0, and written up in [troubleshooting.md](troubleshooting.md#7-apply-step-silently-skipped) because a pipeline that fails by succeeding is worth recognising.
 
-**Status:** accepted, implementation incomplete.
+**Status:** accepted, and now implemented correctly.
 
 ---
 
