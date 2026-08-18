@@ -44,24 +44,25 @@ resource "azurerm_linux_virtual_machine" "vm" {
 
 resource "azurerm_public_ip" "bastion" {
   name                = "pip-bastion-onprem"
-  location            = "denmarkeast" # Fixed: Moved to Denmark East
+  location            = var.bastion_location
   resource_group_name = var.resource_group_name
   allocation_method   = "Static"
   sku                 = "Standard"
 }
 
-# Bastion lives in the on-prem VNet (Denmark East) to manage cross-region workloads securely.
-resource "azurerm_bastion_host" "hub" {
+# The only bastion in the lab, and it sits on the on-prem side. Admins manage from
+# the datacenter, reaching Azure workloads across the tunnel rather than directly.
+resource "azurerm_bastion_host" "onprem" {
   name                = "bastion-onprem"
-  location            = "denmarkeast" # Fixed: Moved to Denmark East
+  location            = var.bastion_location
   resource_group_name = var.resource_group_name
   sku                 = "Standard"
-  ip_connect_enabled  = true
-  tunneling_enabled   = true
+  ip_connect_enabled  = true # reach the spoke by IP over the tunnel
+  tunneling_enabled   = true # native client, so sessions run from a local terminal
 
   ip_configuration {
     name                 = "configuration"
-    subnet_id            = var.subnet_ids["onprem-AzureBastionSubnet"] # Fixed: Points to on-prem subnet
+    subnet_id            = var.subnet_ids["onprem-AzureBastionSubnet"]
     public_ip_address_id = azurerm_public_ip.bastion.id
   }
 }

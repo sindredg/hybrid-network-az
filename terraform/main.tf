@@ -29,6 +29,7 @@ module "compute" {
   location            = azurerm_resource_group.rg.location
   subnet_ids          = module.network.subnet_ids
   workload_vms        = local.workload_vms
+  bastion_location    = local.networks.onprem.location
   vm_size             = var.vm_size
   admin_username      = var.admin_username
   admin_ssh_key       = var.admin_ssh_public_key
