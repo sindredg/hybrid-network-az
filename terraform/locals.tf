@@ -11,6 +11,7 @@ locals {
       subnets = {
         GatewaySubnet         = { prefix = "192.168.0.0/24" }
         snet-onprem-workloads = { prefix = "192.168.1.0/24" }
+        AzureBastionSubnet    = { prefix = "192.168.2.0/26" } # admin bastion, on-prem only, /26 min
       }
     }
 
@@ -22,7 +23,6 @@ locals {
       subnets = {
         GatewaySubnet       = { prefix = "10.0.0.0/24" }
         AzureFirewallSubnet = { prefix = "10.0.1.0/24" }
-        AzureBastionSubnet  = { prefix = "10.0.2.0/24" }
         snet-dns-inbound    = { prefix = "10.0.3.0/28", delegation = "Microsoft.Network/dnsResolvers" }
         snet-dns-outbound   = { prefix = "10.0.3.16/28", delegation = "Microsoft.Network/dnsResolvers" }
       }
@@ -82,16 +82,16 @@ locals {
       rules = [
         { name = "allow-ssh-from-spoke", priority = 100, protocol = "Tcp", port = "22", source = "10.1.0.0/24" },
         { name = "allow-icmp-from-spoke", priority = 110, protocol = "Icmp", port = "*", source = "10.1.0.0/24" },
-        { name = "allow-ssh-from-bastion", priority = 120, protocol = "Tcp", port = "22", source = "10.0.2.0/24" },
+        { name = "allow-ssh-from-bastion", priority = 120, protocol = "Tcp", port = "22", source = "192.168.2.0/26" },
         { name = "deny-all-inbound", priority = 4096, protocol = "*", port = "*", source = "*", access = "Deny" },
       ]
     }
     spoke-workloads = {
       subnet_key = "spoke-snet-spoke-workloads"
       rules = [
-        { name = "allow-ssh-from-bastion", priority = 100, protocol = "Tcp", port = "22", source = "10.0.2.0/24" },
-        { name = "allow-ssh-from-onprem", priority = 110, protocol = "Tcp", port = "22", source = "192.168.0.0/24" },
-        { name = "allow-icmp-from-onprem", priority = 120, protocol = "Icmp", port = "*", source = "192.168.0.0/24" },
+        # Admin reaches the spoke by hopping from the on-prem workload across the tunnel; no bastion in this region.
+        { name = "allow-ssh-from-onprem", priority = 100, protocol = "Tcp", port = "22", source = "192.168.1.0/24" },
+        { name = "allow-icmp-from-onprem", priority = 110, protocol = "Icmp", port = "*", source = "192.168.1.0/24" },
         { name = "deny-all-inbound", priority = 4096, protocol = "*", port = "*", source = "*", access = "Deny" },
       ]
     }
