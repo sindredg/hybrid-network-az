@@ -12,12 +12,19 @@ locals {
       }
     ]
   ])
+
+  # Map each NSG to its corresponding VNet location
+  nsg_locations = {
+    for k, v in var.network_security_groups : k => lookup(
+      var.networks[split("-", v.subnet_key)[0]], "location", var.location
+    )
+  }
 }
 
 resource "azurerm_virtual_network" "vnet" {
   for_each            = var.networks
   name                = each.value.name
-  location            = var.location
+  location            = lookup(each.value, "location", var.location) # Uses custom location or defaults to root
   resource_group_name = var.resource_group_name
   address_space       = each.value.address_space
 }
@@ -45,7 +52,7 @@ resource "azurerm_subnet" "subnet" {
 resource "azurerm_network_security_group" "nsg" {
   for_each            = var.network_security_groups
   name                = "nsg-${each.key}"
-  location            = var.location
+  location            = local.nsg_locations[each.key] # Matches the correct region automatically
   resource_group_name = var.resource_group_name
 
   dynamic "security_rule" {
