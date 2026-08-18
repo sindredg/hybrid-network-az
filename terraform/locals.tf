@@ -9,7 +9,7 @@ locals {
       address_space = ["192.168.0.0/16"]
       has_gateway   = true
       subnets = {
-        GatewaySubnet        = { prefix = "192.168.0.0/24" }
+        GatewaySubnet         = { prefix = "192.168.0.0/24" }
         snet-onprem-workloads = { prefix = "192.168.1.0/24" }
       }
     }
