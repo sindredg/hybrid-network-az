@@ -1,4 +1,4 @@
-name: 'Terraform Deploy - Hybrid Network Azure Lab'
+name: 'Terraform Deploy'
 
 on:
   workflow_dispatch:
@@ -50,7 +50,7 @@ jobs:
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v3
       with:
-        terraform_version: "1.9.0" # Use your preferred version
+        terraform_version: "1.15.5"
 
     - name: Terraform Init (Partial Backend Config)
       run: |
