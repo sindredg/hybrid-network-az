@@ -3,7 +3,7 @@
 resource "azurerm_network_interface" "vm" {
   for_each            = var.workload_vms
   name                = "nic-${each.value.name}"
-  location            = var.location
+  location            = each.value.location # Fixed: Uses per-VM location
   resource_group_name = var.resource_group_name
 
   ip_configuration {
@@ -17,7 +17,7 @@ resource "azurerm_network_interface" "vm" {
 resource "azurerm_linux_virtual_machine" "vm" {
   for_each                        = var.workload_vms
   name                            = each.value.name
-  location                        = var.location
+  location                        = each.value.location # Fixed: Uses per-VM location
   resource_group_name             = var.resource_group_name
   size                            = var.vm_size
   admin_username                  = var.admin_username
@@ -43,17 +43,17 @@ resource "azurerm_linux_virtual_machine" "vm" {
 }
 
 resource "azurerm_public_ip" "bastion" {
-  name                = "pip-bastion-hub"
-  location            = var.location
+  name                = "pip-bastion-onprem"
+  location            = "denmarkeast" # Fixed: Moved to Denmark East
   resource_group_name = var.resource_group_name
   allocation_method   = "Static"
   sku                 = "Standard"
 }
 
-# Standard for ip_connect (reach vnet-onprem over the tunnel) and tunneling (native client).
+# Bastion lives in the on-prem VNet (Denmark East) to manage cross-region workloads securely.
 resource "azurerm_bastion_host" "hub" {
-  name                = "bastion-hub"
-  location            = var.location
+  name                = "bastion-onprem"
+  location            = "denmarkeast" # Fixed: Moved to Denmark East
   resource_group_name = var.resource_group_name
   sku                 = "Standard"
   ip_connect_enabled  = true
@@ -61,7 +61,7 @@ resource "azurerm_bastion_host" "hub" {
 
   ip_configuration {
     name                 = "configuration"
-    subnet_id            = var.subnet_ids["hub-AzureBastionSubnet"]
+    subnet_id            = var.subnet_ids["onprem-AzureBastionSubnet"] # Fixed: Points to on-prem subnet
     public_ip_address_id = azurerm_public_ip.bastion.id
   }
 }
