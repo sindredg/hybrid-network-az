@@ -95,9 +95,4 @@ resource "azurerm_monitor_diagnostic_setting" "fw" {
 
   enabled_log { category = "AZFWNetworkRule" }
   enabled_log { category = "AZFWApplicationRule" }
-
-  metric {
-    category = "AllMetrics"
-    enabled  = false
-  }
 }
