@@ -20,6 +20,8 @@ Grouped by the phase they were hit in. Phase numbering follows [plan.md](../plan
 | [8](#8-provider-rejects-ed25519-ssh-keys) | 2 | `the provided ssh-ed25519 SSH key is not supported` | Provider-side validation, not an Azure limit | Fixed |
 | [9](#9-vm-size-not-available-in-the-region) | 2 | `SkuNotAvailable` for `Standard_B1s` | Subscription capacity restriction on the whole v1 B-series | Fixed |
 | [10](#10-bastion-cannot-reach-the-on-premises-vnet) | 2 | "The target machine is unreachable" | Bastion has no data path over a gateway connection | Open, workaround in place |
+| [11](#11-error-unsupported-block-type) | 3 | "Error: Unsupported block type" | Error on terraform apply after upgrating to 5.X | Ficed |
+| [12](#12-publicipCountlimitreached) | 3 | "PublicIPCountLimitReached" | Public IP quote in sweden central reached | Fixed |
 
 ---
 
@@ -454,3 +456,45 @@ Ten failures, and four shapes between them.
 **Exact-string matching fails unhelpfully.** Item 2 reported a missing record when the record existed with a different value. Anything matching on an exact string will rarely say "close, but different".
 
 **Error messages name the wrong layer.** Item 8 blamed Azure for a provider check; item 10 blamed NSG rules for a routing limitation. Both were solved by testing each layer independently rather than trusting the message's diagnosis.
+
+---
+
+## Phase 3: Azure Firewall, forced routing, on-prem migratuion
+
+### 1. Terraform plan gave "Error: Unsupported block type"
+
+**Symptom**
+
+A sudden pipeline or apply failure during an infrastructure update after adopting a newer provider version.
+
+![Plan: Error Unsupported block type](images/error-unsupported-block-type.png)
+
+
+**Root cause**
+
+This was a direct consequence of upgrading to azurerm provider version 5.x. In major provider updates, breaking changes often include completely removing legacy syntax. The traditional metric block structure (used here to explicitly set enabled = false) has been deprecated and stripped out entirely in version 5.x, causing the parser to flag it as an unrecognized block type.
+
+**Fix**
+Removed the legacy metric block entirely from the resource, relying on the modern provider behavior where metrics remain disabled by default unless explicitly configured via new syntax:
+
+---
+
+### 2. Deployment failed with "PublicIPCountLimitReached"
+
+**Symptom**
+
+A Terraform apply failure during infrastructure provisioning, throwing a quota limit error in the primary region (swedencenral).
+
+![pip limit reached](images/pip-limit-reached.png)
+
+**Root cause**
+
+Azure subscriptions regional limit on Public IP addresses. Placing the Hub VPN Gateways, Azure Firewall, and Azure Bastion all inside Sweden Central simultaneously exceeded this regional ceiling.
+
+**Fix**
+
+Migrated Azure Bastion and the On-Premises workloads, network and VPN Gateway to Denmark East, distributing the four total Public IPs evenly (two in Sweden Central, two in Denmark East) to comply with regional quotas.
+
+**Lesson**
+
+Always verify regional default service limits early in the design phase—especially for quota-constrained resources like Public IPs—rather than assuming a single region can host all central hub and management components. (all though in this scenario it actually led to an even more realistic scenario for simulating an external network / on-prem DC in another region/country)
