@@ -32,7 +32,9 @@ cat <<EOF > /tmp/custom-role.json
     "Microsoft.Network/*",
     "Microsoft.Compute/*",
     "Microsoft.Storage/*",
-    "Microsoft.KeyVault/*"
+    "Microsoft.KeyVault/*",
+    "Microsoft.OperationalInsights/*",
+    "Microsoft.Insights/*"
   ],
   "NotActions": [],
   "DataActions": [],
