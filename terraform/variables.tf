@@ -35,3 +35,9 @@ variable "vm_size" {
   type        = string
   default     = "Standard_B2as_v2"
 }
+
+variable "deploy_firewall" {
+  description = "Firewall, routing and logging. The most expensive resource in the lab."
+  type        = bool
+  default     = false
+}
