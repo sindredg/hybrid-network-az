@@ -209,3 +209,13 @@ Moving the read to the workload removes the conflict rather than working around 
 **Trade-off:** the secret cannot be used as a Terraform input, so anything Terraform genuinely needs at plan time has to come from somewhere else. In practice that is one thing, the VPN pre-shared key, which is why [decision 10](#10-where-does-the-vpn-pre-shared-key-live-and-why) stands. It also makes phase 4 depend on phase 2, since without a VM there is nothing to read the secret and nothing to prove.
 
 **Status:** decided, not yet implemented.
+
+---
+
+## 15. Why migrate "on-prem" from Sweden Central to Denmark East?
+
+**Why:** Its a win/win. In phase 3 we reached the mazimum quota of Public IPs in the swedencentral region. Decided to move the "on-prem" workloads and network + bastion to Denmark East. 
+
+**Gain:** The project now better simulates 2 completely seperate networks in 2 different geographical regions. it more clearly shows the scenario of for example having your azure workloads hosten in Sweden, with your on-premises datacenter being located in Denmark. By also moving the bastion only to denmarkeast we can simulate an admin on-premises connecting to the cloud. later we can move the bastion back into swedencentral and simulate managing from the cloud.
+
+**Status:** terraform refactored, migration completed

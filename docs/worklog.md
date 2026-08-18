@@ -177,14 +177,27 @@ Full matrix, the wire-level checks and the Phase 3 baselines are in [validation/
 
 ---
 
-## Where things stand
+## Phase 3: Firewall, route table, migration to a new region
 
-Phases 0, 1 and 2 complete. [plan.md](../plan.md) holds 3 through 5.
+### Updating Github Actions' service principal permissions
 
-**Built and proven:** three VNets and nine subnets; an encrypted tunnel carrying real traffic; gateway transit confirmed by effective-route lookup; subnet NSGs that override Azure's defaults; Bastion for private access with no public IP on either VM; keyless OIDC deployment with working apply and destroy.
+create custom-role.json and added additional actions:
+![Add permissions to json](images/add-actions-custom-role.png)
 
-**Not built:** Azure Firewall and the route tables without which it would be bypassed; private endpoints; any DNS story.
+Updated role through azure cli:
+![update sp role](images/update-sp-role.png)
 
-**Known gaps:** egress unrestricted in both directions by default rather than by decision; NSG sources at `/16` where the workload `/24` would be tighter; Bastion unable to reach the on-premises VNet.
+made a pull request and all checks passe (terraform deploy is excluded):
+![pr checks pass](images/checks-passed.png)
 
-Next is the firewall and the routing that makes it mean anything. The check to watch is `show-next-hop` flipping from `VirtualNetworkGateway` to `VirtualAppliance`. If it does not, the UDRs are decorative and the firewall is being bypassed.
+on deployment we get an error during apply, as we have reached the max quota for public IPs in swedencentral:
+![pip limit reached](images/pip-limit-reached.png)
+See [docs/troubleshooting.md] for more details
+
+Desicion is to migrate the "on-prem" workloads to Denmark East, this will allow us to stay below the quota end even better simulate an external on-prem network
+
+after some adjustments we manage to successfully refactor and deploy the new estate:
+actions-deploy-phase3
+![refactored deploy success](images/actions-deploy-phase3.png)
+
+connected to the on-prem vm via bastion, route and spoke reachability testing pending
