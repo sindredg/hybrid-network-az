@@ -59,8 +59,18 @@ locals {
 
   # Compute is opt-in. An empty map means the VM loops produce nothing.
   workload_vms = var.deploy_workloads ? {
-    onprem = { name = "vm-onprem", subnet_key = "onprem-snet-onprem-workloads", private_ip = "192.168.1.4" }
-    spoke  = { name = "vm-spoke", subnet_key = "spoke-snet-spoke-workloads", private_ip = "10.1.0.4" }
+    onprem = {
+      name       = "vm-onprem"
+      subnet_key = "onprem-snet-onprem-workloads"
+      private_ip = "192.168.1.4"
+      location   = "denmarkeast" # Matches the Denmark East on-prem VNet
+    }
+    spoke = {
+      name       = "vm-spoke"
+      subnet_key = "spoke-snet-spoke-workloads"
+      private_ip = "10.1.0.4"
+      location   = "swedencentral" # Matches the Sweden Central spoke VNet
+    }
   } : {}
 
   # NSGs are free, so they exist whether or not the VMs do.
