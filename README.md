@@ -2,10 +2,10 @@
 
 Three private Azure networks in separate address spaces, joined by an encrypted IPsec tunnel
 and VNet peering, with shared services centralised in a hub and no public exposure on any
-workload.
+workload. Hub and spoke located in Sweeden Central, "on-prem" located in Denmark East.
 
 This is the pattern for connecting two private networks that do not implicitly trust each
-other: an on-prem datacenter reaching into Azure, two separate cloud estates, or a company
+other: an on-prem datacenter in reaching into Azure, two separate cloud estates, or a company
 you have just acquired. Here `vnet-onprem` plays the datacenter role, but the mechanics are
 identical whichever it is.
 
@@ -38,21 +38,21 @@ which is which.
 
 ```mermaid
 flowchart TB
-    subgraph OP["vnet-onprem<br/>192.168.0.0/16<br/>simulated datacenter"]
+    subgraph OP["vnet-onprem<br/>192.168.0.0/16<br/>simulated datacenter (denmarkeast)"]
         direction LR
         OGW["GatewaySubnet<br/>vgw-onprem"]
+        HBA["AzureBastionSubnet<br/>admin-onprem"]
         OVM["snet-onprem-workloads<br/>vm-onprem"]
     end
 
-    subgraph HUB["vnet-hub<br/>10.0.0.0/16<br/>shared services"]
+    subgraph HUB["vnet-hub<br/>10.0.0.0/16<br/>shared services (swedencentral)"]
         direction LR
         HGW["GatewaySubnet<br/>vgw-hub"]
-        HBA["AzureBastionSubnet<br/>bastion-hub"]
-        HFW["AzureFirewallSubnet<br/>Azure Firewall<br/>phase 3"]
+        HFW["AzureFirewallSubnet<br/>Azure Firewall"]
         HDN["snet-dns-inbound /28<br/>snet-dns-outbound /28<br/>DNS Private Resolver<br/>phase 5"]
     end
 
-    subgraph SP["vnet-spoke<br/>10.1.0.0/16<br/>workload"]
+    subgraph SP["vnet-spoke<br/>10.1.0.0/16<br/>workload(swedencentral)"]
         direction LR
         SVM["snet-spoke-workloads<br/>vm-spoke"]
         SPL["snet-privatelink<br/>private endpoint to Key Vault<br/>phase 4"]
@@ -71,9 +71,7 @@ flowchart TB
     linkStyle 0 stroke-width:3px
 ```
 
-Green is deployed. Dashed grey is planned, tagged with the phase that adds it.
-
-Three non-overlapping ranges, chosen so the simulated datacenter looks nothing like the Azure side. Neither VM has a public IP; access is through Bastion. The spoke has no gateway on its own, which is the point of the network topology: one gateway in the hub that serves every spoke.
+Three non-overlapping ranges, chosen so the simulated datacenter looks nothing like the Azure side. Neither VM has a public IP; admin access is through Bastion to the "on-prem" vm. The spoke has no gateway on its own, which is the point of the network topology: one gateway in the hub that serves every spoke.
 
 ---
 
