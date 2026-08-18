@@ -30,21 +30,21 @@ Built incrementally in phases, with each layer validated before moving to the ne
 
 ```mermaid
 flowchart TB
-    subgraph OP["vnet-onprem<br/>192.168.0.0/16<br/>simulated datacenter (denmarkeast)"]
+    subgraph OP["vnet-onprem - 192.168.0.0/16 - simulated datacenter (denmarkeast)"]
         direction TB
         OGW["GatewaySubnet<br/>vgw-onprem"]
         HBA["AzureBastionSubnet<br/>admin-onprem"]
         OVM["snet-onprem-workloads<br/>vm-onprem"]
     end
 
-    subgraph HUB["vnet-hub<br/>10.0.0.0/16<br/>shared services (swedencentral)"]
+    subgraph HUB["vnet-hub - 10.0.0.0/16 - shared services (swedencentral)"]
         direction TB
         HGW["GatewaySubnet<br/>vgw-hub"]
         HFW["AzureFirewallSubnet<br/>Azure Firewall"]
         HDN["snet-dns-inbound /28<br/>snet-dns-outbound /28<br/>DNS Private Resolver<br/>phase 5"]
     end
 
-    subgraph SP["vnet-spoke<br/>10.1.0.0/16<br/>workload (swedencentral)"]
+    subgraph SP["vnet-spoke - 10.1.0.0/16 - workload (swedencentral)"]
         direction TB
         SVM["snet-spoke-workloads<br/>vm-spoke"]
         SPL["snet-privatelink<br/>private endpoint to Key Vault<br/>phase 4"]
