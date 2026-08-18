@@ -34,6 +34,29 @@ module "compute" {
   admin_ssh_key       = var.admin_ssh_public_key
 }
 
+module "firewall" {
+  count               = var.deploy_firewall ? 1 : 0
+  source              = "./modules/firewall"
+  resource_group_name = azurerm_resource_group.rg.name
+  location            = azurerm_resource_group.rg.location
+  firewall_subnet_id  = module.network.subnet_ids["hub-AzureFirewallSubnet"]
+  spoke_range         = local.networks.spoke.address_space[0]
+  onprem_range        = local.networks.onprem.address_space[0]
+}
+
+# Separate from the firewall module so the dependency is explicit and acyclic.
+module "routing" {
+  count                 = var.deploy_firewall ? 1 : 0
+  source                = "./modules/routing"
+  resource_group_name   = azurerm_resource_group.rg.name
+  location              = azurerm_resource_group.rg.location
+  firewall_private_ip   = module.firewall[0].private_ip
+  spoke_subnet_id       = module.network.subnet_ids["spoke-snet-spoke-workloads"]
+  hub_gateway_subnet_id = module.network.subnet_ids["hub-GatewaySubnet"]
+  spoke_range           = local.networks.spoke.address_space[0]
+  onprem_range          = local.networks.onprem.address_space[0]
+}
+
 # Stays at root: it wires two modules together, and the spoke side must wait for
 # the hub gateway or Azure rejects use_remote_gateways.
 resource "azurerm_virtual_network_peering" "this" {
