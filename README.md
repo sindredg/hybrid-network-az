@@ -1,36 +1,28 @@
 # Azure Private Hybrid Network
 
-Three private Azure networks in separate address spaces, joined by an encrypted IPsec tunnel
-and VNet peering, with shared services centralised in a hub and no public exposure on any
-workload. Hub and spoke located in Sweeden Central, "on-prem" located in Denmark East.
+Three private Azure networks in separate address spaces, joined by an encrypted IPsec tunnel and VNet peering, with shared services centralized in a hub and zero public exposure on any workload. The hub and spoke are located in Sweden Central, with the simulated "on-prem" network in Denmark East.
 
-This is the pattern for connecting two private networks that do not implicitly trust each
-other: an on-prem datacenter in reaching into Azure, two separate cloud estates, or a company
-you have just acquired. Here `vnet-onprem` plays the datacenter role, but the mechanics are
-identical whichever it is.
+This is the pattern for connecting two private networks that do not implicitly trust each other: an on-premises datacenter reaching into Azure, two separate cloud estates, or an acquired company's network. Here vnet-onprem plays the datacenter role, but the mechanics could be identical regardless of the scenario.
 
 Built with Terraform and deployed from GitHub Actions.
 
 ## What it does
 
-- **Encrypted connectivity between separate address domains.** An IPsec tunnel between two
-  VPN gateways, plus VNet peering with gateway transit, so the spoke reaches across the
-  tunnel through the hub's gateway instead of paying for one of its own.
-- **Centralised inspection.** A firewall in the hub with user-defined routes that force
-  traffic through it, rather than letting the peering carry it straight past. Nothing moves
-  between networks uninspected.
-- **No public exposure.** No workload has a public IP. Admin access goes through Bastion,
-  PaaS is reached over private endpoints instead of public service endpoints, and egress
-  leaves through the firewall rather than Azure's default SNAT.
-- **Name resolution across the boundary.** A DNS Private Resolver so private names resolve
-  in both directions, which is the part that usually breaks in hybrid setups.
-- **Keyless delivery.** OIDC federation into Entra ID, so no Azure credential exists in this
-  repository. Remote state, and applies that only run when someone deliberately presses the
-  "deploy" button in GitHub Actions.
+- **Encrypted connectivity between separate address domains.** An IPsec tunnel between
+  two VPN gateways connects on-premises workloads in Denmark East with the cloud environment
+  in Sweden Central. VNet peering with gateway transit allows the spoke to reach across the
+  tunnel through the hub's gateway rather than deploying its own.
+- **Centralised inspection.** A firewall in the hub uses user-defined routes (UDRs) to
+  force traffic through it, preventing peering traffic from bypassing inspection.
+- **No public exposure.** Workloads have no public IPs. Administrative access goes through
+  Azure Bastion, PaaS services are reached over private endpoints, and egress leaves through
+  the firewall instead of Azure's default SNAT.
+- **Name resolution across the boundary.** A DNS Private Resolver ensures private names resolve
+  in both directions across the hybrid boundary.
+- **Keyless delivery.** OIDC federation into Entra ID eliminates static credentials in the repository.
+  Infrastructure changes use remote state and execute only when manually triggered in GitHub Actions.
 
-Built in phases, each one exercised before the next starts. Phases 0 to 2 are deployed and
-validated; the firewall, private endpoints and DNS resolver are next. The diagram below marks
-which is which.
+Built incrementally in phases, with each layer validated before moving to the next. Core networking, VPN connectivity, Bastion access, and the Azure Firewall are deployed; private endpoints and the DNS resolver are next.
 
 ---
 
@@ -39,21 +31,21 @@ which is which.
 ```mermaid
 flowchart TB
     subgraph OP["vnet-onprem<br/>192.168.0.0/16<br/>simulated datacenter (denmarkeast)"]
-        direction LR
+        direction TB
         OGW["GatewaySubnet<br/>vgw-onprem"]
         HBA["AzureBastionSubnet<br/>admin-onprem"]
         OVM["snet-onprem-workloads<br/>vm-onprem"]
     end
 
     subgraph HUB["vnet-hub<br/>10.0.0.0/16<br/>shared services (swedencentral)"]
-        direction LR
+        direction TB
         HGW["GatewaySubnet<br/>vgw-hub"]
         HFW["AzureFirewallSubnet<br/>Azure Firewall"]
         HDN["snet-dns-inbound /28<br/>snet-dns-outbound /28<br/>DNS Private Resolver<br/>phase 5"]
     end
 
-    subgraph SP["vnet-spoke<br/>10.1.0.0/16<br/>workload(swedencentral)"]
-        direction LR
+    subgraph SP["vnet-spoke<br/>10.1.0.0/16<br/>workload (swedencentral)"]
+        direction TB
         SVM["snet-spoke-workloads<br/>vm-spoke"]
         SPL["snet-privatelink<br/>private endpoint to Key Vault<br/>phase 4"]
     end
@@ -64,14 +56,14 @@ flowchart TB
     SVM -.->|"UDR forces inspection<br/>phase 3"| HFW
     OVM -.->|"resolves privatelink<br/>across the tunnel<br/>phase 5"| HDN
 
-    classDef built stroke:#2da44e,stroke-width:2px
+    classDef built stroke:#2da44e,stroke-width:2px,color:#e6edf3
     classDef planned stroke:#8b949e,stroke-width:1px,stroke-dasharray:4 4,color:#8b949e
-    class OGW,OVM,HGW,HBA,SVM built
-    class HFW,HDN,SPL planned
-    linkStyle 0 stroke-width:3px
+    class OGW,OVM,HGW,HBA,SVM,HFW built
+    class HDN,SPL planned
+    linkStyle 0 stroke-width:3px,stroke:#2da44e
 ```
 
-Three non-overlapping ranges, chosen so the simulated datacenter looks nothing like the Azure side. Neither VM has a public IP; admin access is through Bastion to the "on-prem" vm. The spoke has no gateway on its own, which is the point of the network topology: one gateway in the hub that serves every spoke.
+Three non-overlapping ranges, chosen so the simulated on-prem datacenter looks nothing like the Azure side. Neither VM has a public IP; admin access is through Bastion to the "on-prem" vm. The spoke has no gateway on its own, which is the point of the network topology: one gateway in the hub that serves every spoke.
 
 ---
 
@@ -85,10 +77,8 @@ Three non-overlapping ranges, chosen so the simulated datacenter looks nothing l
 | [docs/troubleshooting.md](docs/troubleshooting.md) | Ten failures grouped by phase, with the real error, the root cause and the fix |
 | [docs/terraform-patterns.md](docs/terraform-patterns.md) | The map, flatten and for_each pattern, and where it leaks |
 
-The troubleshooting log is the one worth reading. Four of the ten were Azure withdrawing something that only failed at apply time, and two had error messages that named the wrong layer entirely.
-
 ---
 
 ## Stack
 
-Azure (Sweden Central), Terraform with the AzureRM provider, GitHub Actions, Entra ID workload identity federation, Azure RBAC custom roles.
+Azure (Sweden Central, Denmark East), Terraform with the AzureRM provider, GitHub Actions, Entra ID workload identity federation, Azure RBAC custom roles.
