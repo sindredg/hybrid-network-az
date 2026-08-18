@@ -43,23 +43,20 @@ locals {
 
   # Reserved: AzureFirewallManagementSubnet 10.0.4.0/26, only for the Basic firewall SKU.
 
-  # for_each needs a flat collection. Each object carries vnet_key and a composite key,
-  # because both vnet-onprem and vnet-hub contain a GatewaySubnet.
-  all_subnets = flatten([
-    for vnet_key, vnet_val in local.networks : [
-      for subnet_name, subnet in vnet_val.subnets : {
-        key            = "${vnet_key}-${subnet_name}"
-        vnet_key       = vnet_key
-        vnet_name      = vnet_val.name
-        subnet_name    = subnet_name
-        address_prefix = subnet.prefix
-        delegation     = try(subnet.delegation, null)
-      }
-    ]
-  ])
-
   # The spoke has no gateway. Looping over all networks is what created pip-vpn-spoke.
   gateway_networks = { for k, v in local.networks : k => v if v.has_gateway }
+
+  # One entry per direction. Peering is not symmetric: each side declares its own flags.
+  peerings = [
+    { name = "peer-hub-to-spoke", from = "hub", to = "spoke", allow_gateway_transit = true, use_remote_gateways = false },
+    { name = "peer-spoke-to-hub", from = "spoke", to = "hub", allow_gateway_transit = false, use_remote_gateways = true },
+  ]
+
+  # Also one per direction. A VNet-to-VNet tunnel is two connections pointing at each other.
+  connections = [
+    { name = "conn-onprem-to-hub", from = "onprem", to = "hub" },
+    { name = "conn-hub-to-onprem", from = "hub", to = "onprem" },
+  ]
 
   # Compute is opt-in. An empty map means the VM loops produce nothing.
   workload_vms = var.deploy_workloads ? {
@@ -76,6 +73,7 @@ locals {
       rules = [
         { name = "allow-ssh-from-spoke", priority = 100, protocol = "Tcp", port = "22", source = "10.1.0.0/16" },
         { name = "allow-icmp-from-spoke", priority = 110, protocol = "Icmp", port = "*", source = "10.1.0.0/16" },
+        { name = "allow-ssh-from-bastion", priority = 120, protocol = "Tcp", port = "22", source = "10.0.2.0/24" },
         { name = "deny-all-inbound", priority = 4096, protocol = "*", port = "*", source = "*", access = "Deny" },
       ]
     }
@@ -89,5 +87,4 @@ locals {
       ]
     }
   }
-
 }

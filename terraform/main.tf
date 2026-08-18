@@ -1,123 +1,52 @@
-# If we want Terraform to manage the resource group:
 resource "azurerm_resource_group" "rg" {
   name     = local.resource_group_name
   location = local.location
 }
 
-# Create all VNets using the map loop
-resource "azurerm_virtual_network" "vnet" {
-  for_each            = local.networks
-  name                = each.value.name
-  location            = azurerm_resource_group.rg.location
+module "network" {
+  source                  = "./modules/network"
+  resource_group_name     = azurerm_resource_group.rg.name
+  location                = azurerm_resource_group.rg.location
+  networks                = local.networks
+  network_security_groups = local.network_security_groups
+}
+
+module "connectivity" {
+  source              = "./modules/connectivity"
   resource_group_name = azurerm_resource_group.rg.name
-  address_space       = each.value.address_space
+  location            = azurerm_resource_group.rg.location
+  gateway_networks    = local.gateway_networks
+  subnet_ids          = module.network.subnet_ids
+  connections         = local.connections
+  vpn_shared_key      = var.vpn_shared_key
 }
 
-# Create all subnets using the flattened loop
-resource "azurerm_subnet" "subnet" {
-  for_each             = { for s in local.all_subnets : s.key => s }
-  name                 = each.value.subnet_name
-  resource_group_name  = azurerm_resource_group.rg.name
-  virtual_network_name = azurerm_virtual_network.vnet[each.value.vnet_key].name
-  address_prefixes     = [each.value.address_prefix]
-
-  # Only the DNS resolver subnets set this.
-  dynamic "delegation" {
-    for_each = each.value.delegation == null ? [] : [each.value.delegation]
-    content {
-      name = "delegation"
-      service_delegation {
-        name    = delegation.value
-        actions = ["Microsoft.Network/virtualNetworks/subnets/join/action"]
-      }
-    }
-  }
+# Gated on the module block rather than on every resource inside it.
+module "compute" {
+  count               = var.deploy_workloads ? 1 : 0
+  source              = "./modules/compute"
+  resource_group_name = azurerm_resource_group.rg.name
+  location            = azurerm_resource_group.rg.location
+  subnet_ids          = module.network.subnet_ids
+  workload_vms        = local.workload_vms
+  vm_size             = var.vm_size
+  admin_username      = var.admin_username
+  admin_ssh_key       = var.admin_ssh_public_key
 }
 
-# Hub to Spoke Peering
-resource "azurerm_virtual_network_peering" "hub_to_spoke" {
-  name                         = "peer-hub-to-spoke"
+# Stays at root: it wires two modules together, and the spoke side must wait for
+# the hub gateway or Azure rejects use_remote_gateways.
+resource "azurerm_virtual_network_peering" "this" {
+  for_each = { for p in local.peerings : p.name => p }
+
+  name                         = each.value.name
   resource_group_name          = azurerm_resource_group.rg.name
-  virtual_network_name         = azurerm_virtual_network.vnet["hub"].name
-  remote_virtual_network_id    = azurerm_virtual_network.vnet["spoke"].id
+  virtual_network_name         = module.network.vnet_names[each.value.from]
+  remote_virtual_network_id    = module.network.vnet_ids[each.value.to]
   allow_virtual_network_access = true
   allow_forwarded_traffic      = true
-  allow_gateway_transit        = true
-}
+  allow_gateway_transit        = each.value.allow_gateway_transit
+  use_remote_gateways          = each.value.use_remote_gateways
 
-resource "azurerm_virtual_network_peering" "spoke_to_hub" {
-  name                         = "peer-spoke-to-hub"
-  resource_group_name          = azurerm_resource_group.rg.name
-  virtual_network_name         = azurerm_virtual_network.vnet["spoke"].name
-  remote_virtual_network_id    = azurerm_virtual_network.vnet["hub"].id
-  allow_virtual_network_access = true
-  allow_forwarded_traffic      = true
-  use_remote_gateways          = true
-  depends_on                   = [azurerm_virtual_network_gateway.hub_gw]
-}
-
-# Public IPs for VPN Gateways
-resource "azurerm_public_ip" "vpn_pip" {
-  for_each            = local.gateway_networks
-  name                = "pip-vpn-${each.key}"
-  location            = local.location
-  resource_group_name = azurerm_resource_group.rg.name
-  allocation_method   = "Static"
-  sku                 = "Standard"
-  zones               = ["1", "2", "3"] # <--- Required for AZ-skus
-}
-
-# On-Prem VPN Gateway
-resource "azurerm_virtual_network_gateway" "onprem_gw" {
-  name                = "vgw-onprem"
-  location            = azurerm_resource_group.rg.location
-  resource_group_name = azurerm_resource_group.rg.name
-  type                = "Vpn"
-  vpn_type            = "RouteBased"
-  sku                 = "VpnGw1AZ" # <--- Updated to AZ SKU
-
-  ip_configuration {
-    name                          = "vnetGatewayConfig"
-    public_ip_address_id          = azurerm_public_ip.vpn_pip["onprem"].id
-    private_ip_address_allocation = "Dynamic"
-    subnet_id                     = azurerm_subnet.subnet["onprem-GatewaySubnet"].id
-  }
-}
-
-# Hub VPN Gateway
-resource "azurerm_virtual_network_gateway" "hub_gw" {
-  name                = "vgw-hub"
-  location            = azurerm_resource_group.rg.location
-  resource_group_name = azurerm_resource_group.rg.name
-  type                = "Vpn"
-  vpn_type            = "RouteBased"
-  sku                 = "VpnGw1AZ" # <--- Updated to AZ SKU
-
-  ip_configuration {
-    name                          = "vnetGatewayConfig"
-    public_ip_address_id          = azurerm_public_ip.vpn_pip["hub"].id
-    private_ip_address_allocation = "Dynamic"
-    subnet_id                     = azurerm_subnet.subnet["hub-GatewaySubnet"].id
-  }
-}
-
-# Site-to-Site Connections
-resource "azurerm_virtual_network_gateway_connection" "onprem_to_hub" {
-  name                            = "conn-onprem-to-hub"
-  location                        = azurerm_resource_group.rg.location
-  resource_group_name             = azurerm_resource_group.rg.name
-  type                            = "Vnet2Vnet"
-  virtual_network_gateway_id      = azurerm_virtual_network_gateway.onprem_gw.id
-  peer_virtual_network_gateway_id = azurerm_virtual_network_gateway.hub_gw.id
-  shared_key                      = var.vpn_shared_key
-}
-
-resource "azurerm_virtual_network_gateway_connection" "hub_to_onprem" {
-  name                            = "conn-hub-to-onprem"
-  location                        = azurerm_resource_group.rg.location
-  resource_group_name             = azurerm_resource_group.rg.name
-  type                            = "Vnet2Vnet"
-  virtual_network_gateway_id      = azurerm_virtual_network_gateway.hub_gw.id
-  peer_virtual_network_gateway_id = azurerm_virtual_network_gateway.onprem_gw.id
-  shared_key                      = var.vpn_shared_key
+  depends_on = [module.connectivity]
 }

@@ -1,29 +1,12 @@
-output "resource_group_name" {
-  description = "Resource group holding the lab."
-  value       = azurerm_resource_group.rg.name
-}
+output "resource_group_name" { value = azurerm_resource_group.rg.name }
 
-output "subnet_prefixes" {
-  description = "Deployed address plan. Compare against README."
-  value       = { for k, v in azurerm_subnet.subnet : k => one(v.address_prefixes) }
-}
+# The deployed address plan, for comparing against the docs.
+output "subnet_prefixes" { value = module.network.subnet_prefixes }
 
-output "subnet_ids" {
-  description = "Subnet IDs, keyed as <network>-<subnet name>."
-  value       = { for k, v in azurerm_subnet.subnet : k => v.id }
-}
+output "subnet_ids" { value = module.network.subnet_ids }
 
-output "gateway_public_ips" {
-  description = "Tunnel endpoints, one per gateway."
-  value       = { for k, v in azurerm_public_ip.vpn_pip : k => v.ip_address }
-}
+# Tunnel endpoints, one per gateway.
+output "gateway_public_ips" { value = module.connectivity.public_ips }
 
-output "tunnel_status_command" {
-  description = "Checks whether the tunnel is actually up."
-  value       = "az network vpn-connection show -n ${azurerm_virtual_network_gateway_connection.onprem_to_hub.name} -g ${azurerm_resource_group.rg.name} --query connectionStatus -o tsv"
-}
-
-output "vm_private_ips" {
-  description = "Workload VM addresses, for the cross-tunnel test."
-  value       = { for k, v in azurerm_linux_virtual_machine.vm : k => v.private_ip_address }
-}
+# Empty when deploy_workloads is false and the compute module is not instantiated.
+output "vm_private_ips" { value = try(module.compute[0].vm_private_ips, {}) }
