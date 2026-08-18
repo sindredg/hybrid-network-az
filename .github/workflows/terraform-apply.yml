@@ -8,6 +8,11 @@ on:
         type: boolean
         default: false
 
+      deploy_firewall:
+        description: 'Deploy Azure Firewall and forced routing'
+        type: boolean
+        default: false
+
   # 2. Automatically runs a safe "terraform plan" when you open a PR (no applies)
   pull_request:
     branches:
@@ -33,6 +38,7 @@ env:
   TF_VAR_vpn_shared_key: ${{ secrets.VPN_SHARED_KEY }}
   TF_VAR_admin_ssh_public_key: ${{ secrets.VM_SSH_PUBLIC_KEY }}
   TF_VAR_deploy_workloads: ${{ inputs.deploy_workloads || false }}
+  TF_VAR_deploy_firewall: ${{ inputs.deploy_firewall || false }}
 
 jobs:
   terraform:
