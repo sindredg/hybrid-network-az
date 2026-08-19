@@ -29,6 +29,14 @@ resource "azurerm_linux_virtual_machine" "vm" {
     public_key = var.admin_ssh_key
   }
 
+  # Only the spoke VM reads Key Vault, over the private endpoint.
+  dynamic "identity" {
+    for_each = each.key == "spoke" ? [1] : []
+    content {
+      type = "SystemAssigned"
+    }
+  }
+
   os_disk {
     caching              = "ReadWrite"
     storage_account_type = "Standard_LRS"
