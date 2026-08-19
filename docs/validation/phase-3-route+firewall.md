@@ -7,7 +7,7 @@ traceroute shows 1 hop from on-prem VM to firewall:
 ![traceroute from onptem to fw](../images/onprem-to-firewall.png)
 
 traceroute shows 2 hops from onprem VM to spoke VM:
-![traceroute from onptem to spoke](/images/onprem-to-spoke.png)
+![traceroute from onptem to spoke](../images/onprem-to-spoke.png)
 
 SSH from on-prem VM to spoke VM succeeds:
 ![ssh from onptem to spoke](../images/ssh-onprem-spoke.png)
