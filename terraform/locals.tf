@@ -113,6 +113,7 @@ locals {
         { name = "allow-icmp-from-spoke", priority = 110, protocol = "Icmp", port = "*", source = "10.1.0.0/24" },
         { name = "allow-ssh-from-bastion", priority = 120, protocol = "Tcp", port = "22", source = "192.168.2.0/26" },
         { name = "allow-dns-from-resolver", priority = 130, protocol = "Udp", port = "53", source = "10.0.3.16/28" },
+        { name = "allow-dns-tcp-from-resolver", priority = 131, protocol = "Tcp", port = "53", source = "10.0.3.16/28" },
         { name = "deny-all-inbound", priority = 4096, protocol = "*", port = "*", source = "*", access = "Deny" },
       ]
     }

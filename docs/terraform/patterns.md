@@ -371,14 +371,14 @@ key and value, calculate the output, then repeat for the next item.
 - Using a list index as long-term resource identity.
 - Reading `k`, `v`, or `s` as Terraform keywords instead of arbitrary local names.
 
-## The 30-second interview explanation
+## tldr
 
-> I modelled the topology as a nested map so the address plan is data rather than repeated resource
+> We modelled the topology as a nested map so the address plan is data rather than repeated resource
 > blocks. The network module loops directly over the VNet map. Because subnets are nested inside each
-> VNet, I use nested `for` expressions and `flatten()` to produce one flat subnet list. I preserve the
+> VNet, we use nested `for` expressions and `flatten()` to produce one flat subnet list. We preserve the
 > parent VNet key in every subnet object, then convert the list to a map keyed by a stable composite
 > key such as `hub-snet-dns-inbound`. `for_each` creates one resource per map entry, and the preserved
-> parent key lets each subnet reference its VNet. I chose `for_each` over `count` so resource addresses
+> parent key lets each subnet reference its VNet. We chose `for_each` over `count` so resource addresses
 > remain stable when unrelated entries are added or removed.
 
 That is the entire pattern. The rest of this document takes it apart line by line.
@@ -699,7 +699,7 @@ azurerm_subnet.subnet["hub-snet-dns-inbound"]
 
 Adding another subnet does not renumber either existing instance.
 
-## Interview questions this pattern answers
+## tldr 2.0
 
 **Why use a map?**
 
@@ -740,5 +740,4 @@ over this:
 for k, v in local.networks
 ```
 
-Both work. Only the first one helps the next person—including you in an interview—explain what the
-expression is doing without mentally decoding every letter.
+Both work.

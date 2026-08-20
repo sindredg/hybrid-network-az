@@ -18,6 +18,11 @@ on:
         type: boolean
         default: false
 
+      deploy_dns:
+        description: 'Deploy Azure DNS Private Resolver'
+        type: boolean
+        default: false
+
   # 2. Automatically runs a safe "terraform plan" when you open a PR (no applies)
   pull_request:
     branches:
@@ -42,9 +47,12 @@ env:
   ARM_USE_OIDC: true
   TF_VAR_vpn_shared_key: ${{ secrets.VPN_SHARED_KEY }}
   TF_VAR_admin_ssh_public_key: ${{ secrets.VM_SSH_PUBLIC_KEY }}
-  TF_VAR_deploy_workloads: ${{ inputs.deploy_workloads || false }}
-  TF_VAR_deploy_firewall: ${{ inputs.deploy_firewall || false }}
-  TF_VAR_deploy_privatelink: ${{ inputs.deploy_privatelink || false }}
+  # PRs always plan the complete desired topology. Manual runs use the checkboxes.
+  TF_VAR_deploy_workloads: ${{ github.event_name == 'pull_request' || inputs.deploy_workloads || false }}
+  TF_VAR_deploy_firewall: ${{ github.event_name == 'pull_request' || inputs.deploy_firewall || false }}
+  TF_VAR_deploy_privatelink: ${{ github.event_name == 'pull_request' || inputs.deploy_privatelink || false }}
+  TF_VAR_deploy_dns: ${{ github.event_name == 'pull_request' || inputs.deploy_dns || false }}
+
 jobs:
   terraform:
     name: 'Terraform'

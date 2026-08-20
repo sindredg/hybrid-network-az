@@ -6,7 +6,14 @@ variable "outbound_subnet_id" { type = string }
 variable "inbound_ip" { type = string }
 
 # Must end with a trailing dot.
-variable "onprem_zone" { type = string }
+variable "onprem_zone" {
+  type = string
+
+  validation {
+    condition     = endswith(var.onprem_zone, ".")
+    error_message = "onprem_zone must be a fully qualified DNS namespace ending with a dot."
+  }
+}
 
 variable "onprem_dns_server" { type = string }
 variable "linked_vnet_ids" { type = map(string) }

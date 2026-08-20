@@ -29,18 +29,34 @@ Vault access from `vm-spoke` have all been deployed and validated.
 
 ## Phase 5: Azure DNS Private Resolver
 
-The Terraform module exists, but the resolver resources have not been deployed and the GitHub
-Actions workflow does not yet expose `deploy_dns`. Phase 5 is therefore **prepared, not complete**.
+The resolver module, workflow input, transport rules, and validation outputs are prepared in code,
+but the resolver resources have not been deployed. Phase 5 is therefore **prepared, not complete**.
 
-### Prepare
+### Prepared in code
 
-1. Remove `onprem` from the Key Vault private DNS zone links. Keep the zone linked to `hub` and
-   `spoke`; on-premises resolution must go through the resolver inbound endpoint.
-2. Add a `deploy_dns` boolean input and `TF_VAR_deploy_dns` mapping to the deploy workflow.
-3. Review the `vm-onprem` bootstrap for idempotent `dnsmasq` installation and a test record in
-   `corp.internal`.
-4. Add TCP/53 from the resolver outbound subnet to `vm-onprem`; the current NSG rule permits only
-   UDP/53, while DNS must support TCP fallback as well.
+1. The Key Vault private DNS zone remains linked to `hub` and `spoke`, but no longer links directly
+   to `onprem`.
+2. The deploy workflow exposes `deploy_dns` and maps it to `TF_VAR_deploy_dns`.
+3. The `vm-onprem` definition installs `dnsmasq` and serves `app.corp.internal` at `192.168.1.4`.
+4. The on-premises workload NSG permits both UDP/53 and TCP/53 from the resolver outbound subnet.
+5. Root outputs expose the resolver, inbound endpoint, outbound endpoint, and forwarding ruleset
+   names or addresses needed for validation.
+
+### Rollout sequence
+
+Use two manual deploy runs so the negative baseline is genuine. In both runs, keep
+`deploy_workloads`, `deploy_firewall`, and `deploy_privatelink` checked; leaving a completed phase
+unchecked asks Terraform to remove it.
+
+1. Run the workflow with `deploy_dns` unchecked. This removes the direct `onprem` private-zone link
+   and adds TCP/53 without creating the resolver.
+2. On `vm-onprem`, run `sudo resolvectl flush-caches`, then query the Key Vault FQDN explicitly
+   against Azure-provided DNS with `nslookup <vault-name>.vault.azure.net 168.63.129.16`. Record that
+   it does not return the private endpoint address `10.1.1.4`.
+3. Run the workflow again with all four deployment inputs checked, including `deploy_dns`.
+4. Restart `vm-onprem` from Azure after the VNet DNS setting changes so its DHCP lease receives
+   `10.0.3.4` as the DNS server. Confirm the active upstream with `resolvectl status` before testing.
+5. Perform the two-direction validation below.
 
 ### Deploy
 
