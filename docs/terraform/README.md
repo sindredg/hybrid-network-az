@@ -148,7 +148,7 @@ module does not try to discover the VNet by splitting a subnet-name string.
 | `firewall` | Firewall, policy, rules, workspace, diagnostics | Firewall subnet and address ranges | Firewall public and private IPs |
 | `routing` | Route tables and subnet associations | Firewall IP, subnet IDs, address ranges | No cross-module output is currently needed |
 | `privatelink` | Key Vault, private endpoint, private DNS zone | Endpoint subnet and linked VNets | Vault ID/name and endpoint IP |
-| `dns` | Private Resolver endpoints, ruleset, forwarding rule, links | Resolver subnets, DNS server, zone, linked VNets | Outputs will be added with Phase 5 validation |
+| `dns` | Private Resolver endpoints, ruleset, forwarding rule, links | Resolver subnets, DNS server, zone, linked VNets | Resolver name, inbound IP, outbound endpoint name, and ruleset name |
 
 The modules are private implementation modules for this repository. Provider configuration and version
 selection therefore remain in the root. If a module is later published or consumed independently, add
@@ -180,7 +180,7 @@ repository.
 For a loop or type error, reduce the problem to one real map entry and inspect it with
 `terraform console`. The complete method is in [patterns.md](patterns.md).
 
-## Interview summary
+## tldr
 
 > The root locals model the environment as typed data. The root main file composes domain-focused
 > modules and passes resource IDs between them. Child modules enforce explicit input contracts and use

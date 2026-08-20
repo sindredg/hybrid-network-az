@@ -20,3 +20,9 @@ output "firewall_public_ip" { value = try(module.firewall[0].public_ip, null) }
 output "vault_name" { value = try(module.privatelink[0].vault_name, null) }
 output "private_endpoint_ip" { value = try(module.privatelink[0].private_endpoint_ip, null) }
 output "spoke_vm_principal_id" { value = try(module.compute[0].vm_principal_ids["spoke"], null) }
+
+# Phase 5 DNS validation targets. Null while deploy_dns is false.
+output "dns_resolver_name" { value = try(module.dns[0].resolver_name, null) }
+output "dns_inbound_endpoint_ip" { value = try(module.dns[0].inbound_endpoint_ip, null) }
+output "dns_outbound_endpoint_name" { value = try(module.dns[0].outbound_endpoint_name, null) }
+output "dns_forwarding_ruleset_name" { value = try(module.dns[0].forwarding_ruleset_name, null) }

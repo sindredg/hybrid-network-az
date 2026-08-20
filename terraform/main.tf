@@ -82,9 +82,8 @@ module "privatelink" {
   location                   = local.networks.spoke.location
   private_endpoint_subnet_id = module.network.subnet_ids["spoke-snet-privatelink"]
   linked_vnet_ids = {
-    hub    = module.network.vnet_ids["hub"]
-    spoke  = module.network.vnet_ids["spoke"]
-    onprem = module.network.vnet_ids["onprem"]
+    hub   = module.network.vnet_ids["hub"]
+    spoke = module.network.vnet_ids["spoke"]
   }
   tenant_id = data.azurerm_client_config.current.tenant_id
 }
