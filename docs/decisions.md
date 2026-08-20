@@ -54,9 +54,9 @@ Kept short on purpose. The value is in the reasoning, not the ceremony.
 
 **Over:** assigning the built-in Contributor role.
 
-**Why:** Contributor can do essentially everything except manage access. The thing worth protecting against in an automated pipeline is a compromised or buggy workflow reaching outside its blast radius. A named role also documents what the pipeline is allowed to touch.
+**Why:** Contributor can do essentially everything except manage access. The thing worth protecting against in an automated pipeline is a compromised or buggy workflow reaching outside its blast radius. A named role also documents what the pipeline is allowed to touch. Phase 4 adds a separate `Key Vault Data Access Administrator` assignment at subscription scope; its built-in condition permits delegation only to the supported Key Vault data-plane roles, not unrestricted Owner or general role assignment.
 
-**Trade-off:** the role grants provider-level wildcards (`Microsoft.Network/*`, `Microsoft.Compute/*`, and so on), so it is narrower than Contributor but not genuinely least-privilege. Describing it as least-privilege would overstate it, and the README does not. Tightening it to specific actions is on the plan.
+**Trade-off:** the custom role grants provider-level wildcards (`Microsoft.Network/*`, `Microsoft.Compute/*`, and so on), so it is narrower than Contributor but not genuinely least-privilege. The additional conditional Key Vault delegation role means the CI identity can widen Key Vault data access within that allowed role set, although it still cannot grant itself Owner or arbitrary roles. Describing the combined permissions as least-privilege would overstate them.
 
 **Status:** accepted as a first cut, flagged for tightening.
 
@@ -198,17 +198,19 @@ That last one decides it. Phase 5 is entirely about DNS, and Standard preserves 
 
 ## 14. Why does Terraform never read from Key Vault?
 
-**Chosen:** in phase 4, deploy Key Vault with public network access disabled, reachable only through a private endpoint. Terraform creates the vault and writes a secret into it, but never reads a secret back. The spoke VM reads it at runtime using a system-assigned managed identity.
+**Chosen:** deploy Key Vault with public network access disabled and reachable only through a private endpoint. Terraform manages the vault, endpoint, DNS, managed identity, and vault-scoped role assignment, but it does not create or read secret data. The spoke VM validates access at runtime using its system-assigned managed identity.
 
 **Over:** having Terraform read the secret at plan time, which is the more obvious design.
 
 **Why:** those two things cannot both be true. With public access disabled, only callers inside the virtual network or arriving over a private endpoint reach the data plane. A GitHub-hosted runner is on the public internet and outside the VNet. Key Vault's trusted-services bypass does not cover CI services, and Microsoft's documented workarounds are a self-hosted agent inside the VNet or an IP allowlist entry. Neither is appealing: one adds infrastructure whose only job is to run the pipeline, the other pokes a permanent hole in the thing being demonstrated.
 
-Moving the read to the workload removes the conflict rather than working around it, and it happens to be the pattern worth showing. A VM authenticating with a managed identity over a private link, with no credential stored anywhere, is a better demonstration than a pipeline fetching a secret.
+The first implementation tried to split the difference by having Terraform write `demo-secret` but never read it. That does not work as a lifecycle rule: the provider calls `GetSecret` while checking existing state, and the apply failed with `ForbiddenByRbac`. Even granting that permission would leave the hosted runner outside the vault's private network.
 
-**Trade-off:** the secret cannot be used as a Terraform input, so anything Terraform genuinely needs at plan time has to come from somewhere else. In practice that is one thing, the VPN pre-shared key, which is why [decision 10](#10-where-does-the-vpn-pre-shared-key-live-and-why) stands. It also makes phase 4 depend on phase 2, since without a VM there is nothing to read the secret and nothing to prove.
+Moving all Key Vault secret data operations out of Terraform removes the conflict rather than working around it, and it happens to be the pattern worth showing. A VM authenticating with a managed identity over a private link, with no Key Vault credential stored in the repository or VM, is a better demonstration than a pipeline fetching a secret. The Phase 4 test uses a successful list request with an empty result, which proves DNS, Private Link transport, token issuance, and RBAC without a demo secret. The VPN pre-shared key remains in protected Terraform state as recorded in decision 10.
 
-**Status:** decided, not yet implemented.
+**Trade-off:** a secret cannot be used as a Terraform input or seeded by the hosted pipeline. Anything Terraform genuinely needs at plan time has to come from somewhere else. In practice that is one thing, the VPN pre-shared key, which is why [decision 10](#10-where-does-the-vpn-pre-shared-key-live-and-why) stands. It also makes Phase 4 depend on Phase 2, since without a VM there is no private caller and no useful proof.
+
+**Status:** implemented and validated in Phase 4. The initial secret resource was removed after the failed apply; `vm-spoke` now receives `Key Vault Secrets User` at vault scope and returns HTTP 200 over `conn_type=PrivateLink`.
 
 ---
 
