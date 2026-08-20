@@ -1,0 +1,21 @@
+# Phase 3 validation: connectivity, firewall and routing
+
+Ping succeeds from on-prem VM to spoke VM:
+![onprem to spoke ping](../images/ping-onprem-spoke.png)
+
+traceroute shows 1 hop from on-prem VM to firewall:
+![traceroute from onptem to fw](../images/onprem-to-firewall.png)
+
+traceroute shows 2 hops from onprem VM to spoke VM:
+![traceroute from onptem to spoke](../images/onprem-to-spoke.png)
+
+SSH from on-prem VM to spoke VM succeeds:
+![ssh from onptem to spoke](../images/ssh-onprem-spoke.png)
+
+trace route from spoke VM to on-prem VM also shows 2 hops:
+![taceroute from spoke to onprem](../images/spoke-to-ompre.png)
+
+**In progress:** nmap scan from on-prem to spoke VM and vice versa shows port 80 and 443 as open. 
+Using netcat (nc) we are able to successfully connect on port 80 and 443 from the other vm, 
+although NSGs explicitly denies anything other than SSH or IMCP. Potential misconfiguration is currently under  investigation.
+![nmap findings](../images/nmap-http-https.png)
