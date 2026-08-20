@@ -19,4 +19,4 @@ output "firewall_public_ip" { value = try(module.firewall[0].public_ip, null) }
 
 output "vault_name" { value = try(module.privatelink[0].vault_name, null) }
 output "private_endpoint_ip" { value = try(module.privatelink[0].private_endpoint_ip, null) }
-output "spoke_vm_principal_id" { value = try(module.compute[0].spoke_vm_principal_id, null) }
+output "spoke_vm_principal_id" { value = try(module.compute[0].vm_principal_ids["spoke"], null) }

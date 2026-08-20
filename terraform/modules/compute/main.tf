@@ -3,7 +3,7 @@
 resource "azurerm_network_interface" "vm" {
   for_each            = var.workload_vms
   name                = "nic-${each.value.name}"
-  location            = each.value.location # Fixed: Uses per-VM location
+  location            = each.value.location
   resource_group_name = var.resource_group_name
 
   ip_configuration {
@@ -17,7 +17,7 @@ resource "azurerm_network_interface" "vm" {
 resource "azurerm_linux_virtual_machine" "vm" {
   for_each                        = var.workload_vms
   name                            = each.value.name
-  location                        = each.value.location # Fixed: Uses per-VM location
+  location                        = each.value.location
   resource_group_name             = var.resource_group_name
   size                            = var.vm_size
   admin_username                  = var.admin_username
@@ -29,28 +29,17 @@ resource "azurerm_linux_virtual_machine" "vm" {
     public_key = var.admin_ssh_key
   }
 
-  # Only the spoke VM reads Key Vault, over the private endpoint.
+  # Identity is an explicit property of each VM, not behavior inferred from its map key.
   dynamic "identity" {
-    for_each = each.key == "spoke" ? [1] : []
+    for_each = each.value.enable_identity ? [1] : []
 
     content {
       type = "SystemAssigned"
     }
   }
 
-  # dnsmasq gives the outbound forwarding rule something to target.
-  custom_data = each.key == "onprem" ? base64encode(<<-EOF
-    #cloud-config
-    packages: [dnsmasq]
-    write_files:
-      - path: /etc/dnsmasq.d/lab.conf
-        content: |
-          listen-address=0.0.0.0
-          bind-interfaces
-          address=/app.corp.internal/192.168.1.4
-    runcmd: [systemctl restart dnsmasq]
-  EOF
-  ) : null
+  # The root environment decides whether a VM needs cloud-init configuration.
+  custom_data = each.value.custom_data == null ? null : base64encode(each.value.custom_data)
 
   os_disk {
     caching              = "ReadWrite"
