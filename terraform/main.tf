@@ -90,3 +90,17 @@ module "privatelink" {
   }
   tenant_id = data.azurerm_client_config.current.tenant_id
 }
+
+module "dns" {
+  count               = var.deploy_dns ? 1 : 0
+  source              = "./modules/dns"
+  resource_group_name = azurerm_resource_group.rg.name
+  location            = local.networks.hub.location
+  hub_vnet_id         = module.network.vnet_ids["hub"]
+  inbound_subnet_id   = module.network.subnet_ids["hub-snet-dns-inbound"]
+  outbound_subnet_id  = module.network.subnet_ids["hub-snet-dns-outbound"]
+  inbound_ip          = "10.0.3.4"
+  onprem_zone         = "corp.internal."
+  onprem_dns_server   = "192.168.1.4"
+  linked_vnet_ids     = { hub = module.network.vnet_ids["hub"], spoke = module.network.vnet_ids["spoke"] }
+}

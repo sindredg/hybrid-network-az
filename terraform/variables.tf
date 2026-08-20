@@ -46,3 +46,8 @@ variable "deploy_privatelink" {
   type    = bool
   default = false
 }
+
+variable "deploy_dns" {
+  type    = bool
+  default = false
+}
