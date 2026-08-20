@@ -14,6 +14,7 @@ RG_STATE_NAME="rg-networks-tfstate"
 STORAGE_ACCOUNT_NAME="sttfstatehybrid$(openssl rand -hex 3)" # Must be globally unique
 CONTAINER_NAME="tfstate"
 ROLE_NAME="HybridNetworkLabTFDeployer"
+KV_DATA_ACCESS_ADMIN_ROLE_ID="8b54135c-b56d-4d72-a534-26097cfdc8d8"
 
 echo "--- 1. Validating Azure CLI Session ---"
 SUBSCRIPTION_ID=$(az account show --query id -o tsv)
@@ -77,6 +78,33 @@ az role assignment create \
   --role "${ROLE_NAME}" \
   --scope "/subscriptions/${SUBSCRIPTION_ID}" \
   --output none || true
+
+# Terraform assigns Key Vault Secrets User to the spoke VM. The custom deployer
+# role intentionally does not include unrestricted roleAssignments/write,
+# because that would let the CI identity grant itself Owner. Microsoft's Key
+# Vault Data Access Administrator role carries a built-in condition that limits
+# delegation to Key Vault data-plane roles. Subscription scope is used because
+# the lab resource group and vault are Terraform-owned and do not exist yet when
+# this bootstrap script first runs.
+KV_ROLE_ASSIGNMENT_COUNT=$(az role assignment list \
+  --assignee-object-id "${SP_ID}" \
+  --fill-principal-name false \
+  --role "${KV_DATA_ACCESS_ADMIN_ROLE_ID}" \
+  --scope "/subscriptions/${SUBSCRIPTION_ID}" \
+  --query 'length(@)' \
+  --output tsv)
+
+if [ "${KV_ROLE_ASSIGNMENT_COUNT}" -eq 0 ]; then
+  az role assignment create \
+    --assignee-object-id "${SP_ID}" \
+    --assignee-principal-type ServicePrincipal \
+    --role "${KV_DATA_ACCESS_ADMIN_ROLE_ID}" \
+    --scope "/subscriptions/${SUBSCRIPTION_ID}" \
+    --output none
+  echo "Assigned Key Vault Data Access Administrator to the deployment identity."
+else
+  echo "Key Vault Data Access Administrator assignment already exists."
+fi
 
 echo "--- 4. Configuring OIDC Federated Credentials for GitHub ---"
 APP_OBJECT_ID=$(az ad app show --id "${APP_ID}" --query id -o tsv)
