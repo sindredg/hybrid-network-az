@@ -156,43 +156,43 @@ Kept short on purpose. The value is in the reasoning, not the ceremony.
 
 ## 11. Why create the firewall and Bastion subnets before the services?
 
-**Chosen:** create `AzureFirewallSubnet` (10.0.1.0/24) and `AzureBastionSubnet` (10.0.2.0/24) as part of the base build, even though nothing occupies them.
+**Chosen:** reserve the service-specific subnets before deploying Azure Firewall and Bastion.
 
 **Over:** adding each subnet at the same time as its service.
 
-**Why:** both services require subnets with those exact names and a minimum size, and both are things this hub should eventually have. Carving the address space up front means the plan does not have to be renegotiated later, and the address plan reads as intentional rather than as whatever was left over.
+**Why:** both services require subnets with exact names and minimum sizes. Carving the address space up front means the plan does not have to be renegotiated later, and the address plan reads as intentional rather than as whatever was left over.
 
-**Trade-off:** the deployed network contains two empty subnets, which looks unfinished, and a reader could reasonably assume a firewall exists. Both are called out in the README's known gaps so nobody has to guess.
+**Trade-off:** the base network initially contained empty service subnets, which could make the topology look more complete than it was.
 
-**Status:** accepted. The same reasoning extends to the DNS resolver and private endpoint subnets in [plan.md](../plan.md) item 0.4.
+**Status:** implemented. `AzureFirewallSubnet` is now occupied in the Sweden Central hub. During Phase 3, Bastion moved with the simulated on-premises environment to `AzureBastionSubnet` (`192.168.2.0/26`) in Denmark East. The same reservation pattern extends to the DNS resolver and private endpoint subnets in [plan.md](../plan.md) item 0.4.
 
 ---
 
-## 12. Why Sweden Central?
+## 12. Why Sweden Central for Azure and Denmark East for on-prem?
 
-**Chosen:** `swedencentral` as the default region for everything.
+**Chosen:** keep the hub and spoke in `swedencentral`, and place the simulated on-premises VNet, gateway, VM, and Bastion in `denmarkeast`.
 
-**Why:** low latency from the operator, and it supports availability zones, which turned out to be mandatory once the AZ gateway SKUs were forced.
+**Why:** Sweden Central offers low latency from the operator and supports the zones required by the selected AZ gateway and chosen for the firewall deployment. Denmark East separates the simulated datacenter from the Azure estate and avoids concentrating all public-IP-consuming services under one regional quota.
 
-**Trade-off:** region-specific SKU availability and quota differ across Azure. Anyone redeploying elsewhere should check that AZ gateway SKUs and zone-redundant public IPs are available before assuming this applies cleanly. The region is a variable, so overriding it is one line.
+**Trade-off:** the cross-region tunnel adds latency and makes per-resource location part of the module interface. Anyone redeploying elsewhere must check SKU availability, availability-zone support, and regional quota in both regions.
 
-**Status:** accepted.
+**Status:** implemented during Phase 3 after Sweden Central returned `PublicIPCountLimitReached` for the firewall public IP.
 
 ---
 
 ## 13. Why Azure Firewall Standard rather than Basic?
 
-**Chosen:** the Standard SKU when the firewall lands in phase 3.
+**Chosen:** Azure Firewall Standard.
 
 **Over:** Basic, which is explicitly positioned for dev, test and small workloads, and looks like the obvious lab choice.
 
 **Why:** three things get in the way of Basic. It requires a second dedicated subnet, `AzureFirewallManagementSubnet` at /26 minimum, on top of `AzureFirewallSubnet`. It is available in limited regions rather than all of them. And it has no DNS proxy.
 
-That last one decides it. Phase 5 is entirely about DNS, and DNS proxy is what keeps FQDN-based firewall rules resolving the same names as the rest of the network. Choosing Basic in phase 3 would mean either reworking it in phase 5 or accepting an inconsistent DNS path through the one part of the lab meant to demonstrate DNS.
+That last one decides it. Phase 5 is entirely about DNS, and Standard preserves the option to enable DNS proxy so FQDN-based firewall rules can resolve the same names as the rest of the network. DNS proxy is not enabled in Phase 3; choosing Basic now would remove that Phase 5 capability or require a firewall redesign later.
 
 **Trade-off:** more per hour than Basic, and Basic would have been adequate for everything phase 3 alone needs. This is paying in phase 3 to avoid rework in phase 5.
 
-**Status:** decided, not yet implemented.
+**Status:** implemented in Phase 3 with a Standard firewall policy, zone-redundant public IP, symmetric UDRs, and diagnostic logging.
 
 ---
 
@@ -214,8 +214,14 @@ Moving the read to the workload removes the conflict rather than working around 
 
 ## 15. Why migrate "on-prem" from Sweden Central to Denmark East?
 
-**Why:** Its a win/win. In phase 3 we reached the mazimum quota of Public IPs in the swedencentral region. Decided to move the "on-prem" workloads and network + bastion to Denmark East. 
+**Chosen:** move the simulated on-premises VNet, VPN gateway, workload VM, and Bastion to Denmark East while keeping the Azure hub and spoke in Sweden Central.
 
-**Gain:** The project now better simulates 2 completely seperate networks in 2 different geographical regions. it more clearly shows the scenario of for example having your azure workloads hosten in Sweden, with your on-premises datacenter being located in Denmark. By also moving the bastion only to denmarkeast we can simulate an admin on-premises connecting to the cloud. later we can move the bastion back into swedencentral and simulate managing from the cloud.
+**Over:** requesting a higher Sweden Central public-IP quota or removing a public-IP-consuming service.
 
-**Status:** terraform refactored, migration completed
+**Why:** Phase 3 exhausted the Sweden Central public-IP quota when Azure Firewall was added. The move distributes the VPN gateway, firewall, and Bastion public IPs across two regions without weakening the design.
+
+**Gain:** the topology now represents two geographically separate environments: Azure workloads in Sweden and a simulated datacenter in Denmark. Keeping Bastion on the Denmark side also models an administrator entering from the on-premises environment before reaching cloud workloads across the tunnel.
+
+**Trade-off:** modules and resources must use per-network locations rather than assuming one root location, and the VNet-to-VNet tunnel now crosses regions.
+
+**Status:** implemented and validated in Phase 3.

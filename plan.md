@@ -4,7 +4,7 @@ Where this lab goes next, in the order it should be built.
 
 The sequencing rule is that **each phase must be provable before the next begins**. Phase 3 is meaningless without phase 2 to observe, phase 5 has nothing to resolve without phase 4. Building them out of order produces resources that exist but demonstrate nothing.
 
-Short version of where things stand: phases 0, 1 and 2 are done. The tunnel carries real traffic, gateway transit is confirmed by effective-route lookup rather than assumed, and the NSGs have been proven scoped rule by rule. What is missing is any control over where traffic goes once it is inside.
+Short version of where things stand: phases 0 through 3 are done. The tunnel carries real traffic, gateway transit and NSGs are validated, and symmetric UDRs now force cross-premises traffic through Azure Firewall. ICMP and SSH remain reachable after route activation, unmatched application traffic is denied, and the captured HTTP decisions appear in Log Analytics.
 
 ---
 
@@ -141,50 +141,38 @@ Baselines captured for later phases: current egress addresses, and `168.63.129.1
 
 Three failures along the way, in [troubleshooting.md](docs/troubleshooting.md#phase-2-workloads-and-access). Full write-up in [worklog.md](docs/worklog.md#phase-2-workloads-nsgs-and-access).
 
-**Left open:** egress is unrestricted in both directions, NSG sources are `/16` where the workload `/24` would be tighter, and Bastion cannot reach the on-premises VNet.
+**Left open after Phase 2:** egress was unrestricted in both directions, NSG sources are `/16` where the workload `/24` would be tighter, and Bastion could not cross the gateway connection to reach the on-premises VNet. Phase 3 routes spoke egress through the firewall and resolves operational access by moving Bastion into the on-premises VNet; on-premises egress remains outside the firewall and the Bastion platform limitation still applies.
 
 ---
 
 ## Phase 3: Azure Firewall and UDRs, to prove inspection
 
-### SKU choice
+**Done.** Azure Firewall Standard is deployed in the hub with policy-based network and application rules, diagnostic logging, and two route tables that create a symmetric inspection path.
 
-Basic is cheaper, but it needs a **second /26 subnet**, is available in **limited regions**, and has **no DNS proxy**. Phase 5 is entirely about DNS, and DNS proxy is what keeps FQDN rules resolving consistently with the rest of the network.
+### What was built
 
-**Standard is the recommendation.** More per hour, one subnet instead of two, available in Sweden Central, and it does not paint phase 5 into a corner. Confirm Basic's regional availability before choosing it purely on price.
+- `fw-hub` in `AzureFirewallSubnet`, private IP `10.0.1.4`, with a zone-redundant Standard public IP.
+- `fwp-hub` and rule collection group `rcg-lab`.
+- Cross-premises network rules allowing ICMP and TCP/22 between `10.1.0.0/16` and `192.168.0.0/16`.
+- A deliberately broad spoke web-egress application rule for HTTP/HTTPS test traffic and package updates.
+- `rt-spoke-workloads`, which sends the on-premises prefix and the default route to the firewall and disables BGP propagation.
+- `rt-hub-gateway`, which sends the spoke prefix to the firewall on the return path.
+- Log Analytics diagnostics for `AZFWNetworkRule` and `AZFWApplicationRule`.
 
-### Routing, which is the part that is easy to get wrong
+The return-path table belongs on the hub `GatewaySubnet`, not the on-premises workload subnet. Traffic arriving over the VNet-to-VNet tunnel must be redirected to the firewall before Azure follows the system route to the spoke. No UDR is attached to `AzureFirewallSubnet` or `AzureBastionSubnet`.
 
-Deploying the firewall changes nothing by itself. Without UDRs, peered traffic routes directly and never sees it. This is the most common real hub-and-spoke mistake.
+### What was proven
 
-- Route table on `snet-spoke-workloads` sending `0.0.0.0/0` and `192.168.0.0/16` to the firewall private IP.
-- Route table on `snet-onprem-workloads` for the return path.
-- **No default route on `AzureFirewallSubnet`.** Keep route tables on workload subnets unless a documented forced-tunneling design requires otherwise.
-- Disable BGP route propagation on the workload route tables where gateway-learned routes would otherwise override the firewall path.
+- Ping and SSH continue to work after UDR activation, and the configuration contains the corresponding explicit cross-premises allow rules. The captured screenshots do not include named network-rule log rows for those two flows.
+- Traceroute is consistent with the firewall as the inspection hop in both directions.
+- An unmatched HTTP request from on-prem to spoke receives Azure Firewall status `470`, `Action: Deny`, `Reason: No rule matched`.
+- For the captured application tests, Log Analytics records the actual source, destination, action, policy, collection, and rule.
+- An apparent `nmap`/`nc` result showing ports 80 and 443 open was resolved as a testing artifact: TCP establishment at the firewall is not proof that the workload service is reachable.
+- A spoke-to-on-prem HTTP request is allowed by the firewall and then times out, consistently with the destination NSG policy. The capture proves the firewall decision but does not independently identify the downstream drop component.
 
-Also leave `AzureBastionSubnet` alone. UDRs are unsupported there when IP-based connection is enabled, which it now is.
+Phase 3 also moved the simulated on-premises VNet, gateway, VM, and Bastion to Denmark East after Sweden Central reached its regional public-IP quota. The change solved the quota constraint and made the hybrid boundary geographically realistic.
 
-### Rules
-
-The firewall denies by default, so a policy with no rule collection group turns the phase 2 ping off rather than inspecting it. Allow ICMP and TCP 22 between `10.1.0.0/16` and `192.168.0.0/16` explicitly. Nothing else, so the first thing the logs show is a deny.
-
-### NSGs
-
-Tighten the phase 2 sources from `/16` to the workload `/24` at the same time. That stops the DNS resolver and private link subnets inheriting SSH access they were never meant to have when phases 4 and 5 land.
-
-### Verification, which is the point of this phase
-
-Deploying a firewall is easy. Proving traffic goes through it is the part that separates a working design from a diagram.
-
-**Before and after on one command.** `show-next-hop` from spoke to on-prem currently returns `VirtualNetworkGateway`. After the UDRs it must return `VirtualAppliance` with the firewall's private IP. If it does not, the route table is not associated or propagation is overriding it, and the firewall is being bypassed while appearing to work.
-
-**Egress identity.** `curl ifconfig.me` from each VM currently returns Azure's default SNAT address. Once `0.0.0.0/0` points at the firewall it should return the firewall's public IP. This is the single clearest demonstration that routing changed, and both baselines are already captured.
-
-**The logs, not just the connection.** Enable diagnostic settings and confirm the phase 2 ping now appears in `AZFWNetworkRule`. A ping that still succeeds with nothing logged means the UDR is inert. That is the failure mode worth deliberately reproducing once, because it is silent.
-
-**Asymmetry.** Remove the `GatewaySubnet` route table and watch connections break while the firewall shows only one direction of the flow. Azure Firewall is stateful, so seeing half a conversation drops it. Understanding this is most of understanding hub-and-spoke routing.
-
-**A deny that is visible.** Try a port with no allow rule and find the corresponding `Deny` in the logs. Proves the rules are being evaluated rather than everything falling through.
+Full evidence and interpretation are in [phase-3-route+firewall.md](docs/validation/phase-3-route+firewall.md). Deployment history is in [worklog.md](docs/worklog.md#phase-3-firewall-forced-routing-and-regional-migration).
 
 ---
 
