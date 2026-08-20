@@ -591,9 +591,10 @@ the identity block did not accept it.
 
 **Fix**
 
-Close the identity block first, then place `custom_data` at virtual-machine resource scope. The
-identity remains conditional for `vm-spoke`; the on-premises bootstrap remains conditional for
-`vm-onprem`.
+The immediate fix was to close the identity block first, then place `custom_data` at virtual-machine
+resource scope. The current implementation also removes the key-name coupling: each root VM object
+sets `enable_identity` and `custom_data` explicitly, and the compute module reads those typed
+attributes.
 
 **Lesson**
 
