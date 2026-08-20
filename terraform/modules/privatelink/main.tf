@@ -35,11 +35,10 @@ resource "azurerm_private_dns_zone" "kv" {
 }
 
 resource "azurerm_private_dns_zone_virtual_network_link" "kv" {
-  for_each              = var.linked_vnet_ids
-  name                  = "link-${each.key}"
-  resource_group_name   = var.resource_group_name
-  private_dns_zone_name = azurerm_private_dns_zone.kv.name
-  virtual_network_id    = each.value
+  for_each            = var.linked_vnet_ids
+  name                = "link-${each.key}"
+  private_dns_zone_id = azurerm_private_dns_zone.kv.id
+  virtual_network_id  = each.value
 }
 
 resource "azurerm_private_endpoint" "kv" {
