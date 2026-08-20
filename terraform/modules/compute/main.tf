@@ -29,6 +29,29 @@ resource "azurerm_linux_virtual_machine" "vm" {
     public_key = var.admin_ssh_key
   }
 
+  # Only the spoke VM reads Key Vault, over the private endpoint.
+  dynamic "identity" {
+    for_each = each.key == "spoke" ? [1] : []
+
+    content {
+      type = "SystemAssigned"
+    }
+  }
+
+  # dnsmasq gives the outbound forwarding rule something to target.
+  custom_data = each.key == "onprem" ? base64encode(<<-EOF
+    #cloud-config
+    packages: [dnsmasq]
+    write_files:
+      - path: /etc/dnsmasq.d/lab.conf
+        content: |
+          listen-address=0.0.0.0
+          bind-interfaces
+          address=/app.corp.internal/192.168.1.4
+    runcmd: [systemctl restart dnsmasq]
+  EOF
+  ) : null
+
   os_disk {
     caching              = "ReadWrite"
     storage_account_type = "Standard_LRS"

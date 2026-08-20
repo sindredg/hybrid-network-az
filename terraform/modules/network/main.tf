@@ -27,6 +27,7 @@ resource "azurerm_virtual_network" "vnet" {
   location            = lookup(each.value, "location", var.location) # Uses custom location or defaults to root
   resource_group_name = var.resource_group_name
   address_space       = each.value.address_space
+  dns_servers         = try(each.value.dns_servers, [])
 }
 
 resource "azurerm_subnet" "subnet" {
