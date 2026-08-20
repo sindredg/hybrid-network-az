@@ -8,6 +8,7 @@ locals {
       location      = "denmarkeast" # <-- Moved to Denmark East
       address_space = ["192.168.0.0/16"]
       has_gateway   = true
+      dns_servers   = var.deploy_dns ? ["10.0.3.4"] : []
       subnets = {
         GatewaySubnet         = { prefix = "192.168.0.0/24" }
         snet-onprem-workloads = { prefix = "192.168.1.0/24" }
@@ -83,6 +84,7 @@ locals {
         { name = "allow-ssh-from-spoke", priority = 100, protocol = "Tcp", port = "22", source = "10.1.0.0/24" },
         { name = "allow-icmp-from-spoke", priority = 110, protocol = "Icmp", port = "*", source = "10.1.0.0/24" },
         { name = "allow-ssh-from-bastion", priority = 120, protocol = "Tcp", port = "22", source = "192.168.2.0/26" },
+        { name = "allow-dns-from-resolver", priority = 130, protocol = "Udp", port = "53", source = "10.0.3.16/28" },
         { name = "deny-all-inbound", priority = 4096, protocol = "*", port = "*", source = "*", access = "Deny" },
       ]
     }
