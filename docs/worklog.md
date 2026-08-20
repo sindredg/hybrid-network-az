@@ -159,7 +159,7 @@ Compute is opt-in per run rather than committed to the repo.
 
 ![Resource group with both VMs, both NSGs, Bastion and its public IP](images/phase2-deployed-resources-portal.png)
 
-Two failures cost a deploy cycle each, an [ed25519 key the provider refused](troubleshooting.md#8-provider-rejects-ed25519-ssh-keys) and a [VM size with no capacity in the region](troubleshooting.md#9-vm-size-not-available-in-the-region). A third, [Bastion not reaching the on-premises VNet](troubleshooting.md#10-bastion-cannot-reach-the-on-premises-vnet), is still open.
+Two failures cost a deploy cycle each, an [ed25519 key the provider refused](troubleshooting.md#8-provider-rejects-ed25519-ssh-keys) and a [VM size with no capacity in the region](troubleshooting.md#9-vm-size-not-available-in-the-region). A third, [Bastion not reaching the on-premises VNet](troubleshooting.md#10-bastion-cannot-reach-the-on-premises-vnet), remained open in Phase 2. Phase 3 resolved operational access by moving Bastion into the on-premises VNet, while the underlying cross-gateway service limitation remains.
 
 Then the thing this phase exists for:
 
@@ -177,27 +177,52 @@ Full matrix, the wire-level checks and the Phase 3 baselines are in [validation/
 
 ---
 
-## Phase 3: Firewall, route table, migration to a new region
+## Phase 3: Firewall, forced routing and regional migration
 
-### Updating Github Actions' service principal permissions
+Phase 3 changed the lab from connected networks into inspected networks. Azure Firewall Standard now sits in the hub, UDRs force the spoke-to-on-prem path through it in both directions, and Log Analytics records the decisions for the captured application requests.
 
-create custom-role.json and added additional actions:
-![Add permissions to json](images/add-actions-custom-role.png)
+### Pipeline permissions
 
-Updated role through azure cli:
-![update sp role](images/update-sp-role.png)
+The GitHub Actions custom role needed additional actions for Azure Firewall, firewall policy, route tables, diagnostic settings, and Log Analytics.
 
-made a pull request and all checks passe (terraform deploy is excluded):
-![pr checks pass](images/checks-passed.png)
+![Custom role JSON with the permissions required by Phase 3](images/add-actions-custom-role.png)
 
-on deployment we get an error during apply, as we have reached the max quota for public IPs in swedencentral:
-![pip limit reached](images/pip-limit-reached.png)
-See [docs/troubleshooting.md] for more details
+The role definition was updated through Azure CLI rather than broadening the pipeline to Contributor.
 
-Desicion is to migrate the "on-prem" workloads to Denmark East, this will allow us to stay below the quota end even better simulate an external on-prem network
+![Azure CLI updating the custom role used by the GitHub Actions service principal](images/update-sp-role.png)
 
-after some adjustments we manage to successfully refactor and deploy the new estate:
-actions-deploy-phase3
-![refactored deploy success](images/actions-deploy-phase3.png)
+The pull request checks passed before the manually triggered deployment.
 
-connected to the on-prem vm via bastion, route and spoke reachability testing pending
+![Pull request with all required checks passing](images/checks-passed.png)
+
+### The regional quota changed the topology
+
+The first apply failed when the firewall public IP exceeded the Sweden Central regional public-IP quota.
+
+![Terraform apply failing with PublicIPCountLimitReached in Sweden Central](images/pip-limit-reached.png)
+
+Rather than request a larger quota for a temporary lab, the simulated on-premises VNet, VPN gateway, workload VM, and Bastion were moved to Denmark East. The Azure hub and spoke remained in Sweden Central. This split the public IPs across regions and made the simulated datacenter boundary more realistic.
+
+The refactored deployment then completed successfully:
+
+![GitHub Actions Terraform apply succeeding after the regional refactor](images/actions-deploy-phase3.png)
+
+The failure and migration are documented in [troubleshooting.md](troubleshooting.md#12-deployment-failed-with-publicipcountlimitreached).
+
+### Firewall and routing outcome
+
+The deployed policy contains explicit cross-premises network rules for ICMP and SSH. The spoke workload route table sends the on-premises prefix and default route to firewall private IP `10.0.1.4`; a second route table on the hub gateway subnet sends the spoke prefix to the same next hop for the return path.
+
+![Azure Firewall policy showing the cross-premises ICMP and SSH rules](images/fw-network-rules.png)
+
+Ping and SSH still succeed after the UDRs are activated, and traceroute reaches each remote workload on the second hop. The configuration contains matching ICMP and SSH allows; the captured screenshots do not include `AZFWNetworkRule` entries that tie those individual sessions to the named rules. Application-rule logs do prove that the captured HTTP traffic traverses the firewall.
+
+The initial `nmap` result appeared to show ports 80 and 443 open. Follow-up `nc`, `curl`, and Log Analytics evidence resolved the discrepancy: Azure Firewall can establish or intercept the TCP connection before making its application-layer decision. HTTP from on-prem to spoke receives firewall status `470` and a default deny; raw-IP HTTPS is denied because the TLS request has no usable SNI hostname.
+
+![HTTP request receiving Azure Firewall status 470 and a default deny](images/phase3-firewall-http-deny.png)
+
+![Application-rule logs showing allows, default denies, and missing-SNI denies](images/phase3-application-rule-logs.png)
+
+The complete evidence and interpretation are in [validation/phase-3-route+firewall.md](validation/phase-3-route+firewall.md).
+
+**End state:** Azure Firewall Standard, symmetric UDRs, explicit ICMP/SSH allows, default application denies, diagnostic logging, and a two-region hybrid topology. Phase 3 is complete.

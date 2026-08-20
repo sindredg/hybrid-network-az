@@ -7,8 +7,9 @@ Evidence that each phase works, captured as it was run. One file per phase.
 | 0 | [phase-0-pipeline.md](phase-0-pipeline.md) | The pipeline applies instead of silently skipping |
 | 1 | [phase-1-tunnel.md](phase-1-tunnel.md) | The topology deploys and tears down from the pipeline |
 | 2 | [phase-2-connectivity.md](phase-2-connectivity.md) | Traffic crosses the tunnel and the NSGs are scoped |
+| 3 | [phase-3-route+firewall.md](phase-3-route+firewall.md) | UDRs define symmetric routing; application allows and default denies are logged |
 
-Phases 3 to 5 are not built yet. See [plan.md](../../plan.md).
+Phases 4 and 5 are tracked in [plan.md](../../plan.md).
 
 ---
 
@@ -27,7 +28,7 @@ A check that passes on one and fails on the other is the interesting case. That 
 Needs `az login` with an account that can read the resource group. All read-only apart from `run-command`, which executes diagnostics on the VM.
 
 ```bash
-RG=rg-hybrid-network-lab; SPOKE=10.1.0.4; ONPREM=192.168.1.4; BASTION=10.0.2.4; HUBGW=10.0.0.4
+RG=rg-hybrid-network-lab; SPOKE=10.1.0.4; ONPREM=192.168.1.4; BASTION=192.168.2.4; HUBGW=10.0.0.4
 ```
 
 **Tunnel status**
@@ -50,7 +51,7 @@ t(){ printf '%-46s %s\n' "$1" "$(az network watcher test-ip-flow -g $RG --vm $2 
 
 Then one line per assertion, listed in [phase-2-connectivity.md](phase-2-connectivity.md).
 
-**Commands on the on-premises VM**, which Bastion cannot reach:
+**Commands on the on-premises VM.** In Phase 2 these required a run-command workaround because Bastion could not cross the gateway connection. Phase 3 resolved operational access by moving Bastion into the on-premises VNet:
 
 ```bash
 R(){ az vm run-command invoke -g $RG -n vm-onprem --command-id RunShellScript --scripts "$1" --query "value[0].message" -o tsv; }

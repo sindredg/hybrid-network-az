@@ -13,12 +13,12 @@ Built with Terraform and deployed from GitHub Actions.
   in Sweden Central. VNet peering with gateway transit allows the spoke to reach across the
   tunnel through the hub's gateway rather than deploying its own.
 - **Centralised inspection.** A firewall in the hub uses user-defined routes (UDRs) to
-  force traffic through it, preventing peering traffic from bypassing inspection.
+  force spoke-to-on-premises traffic and spoke egress through it.
 - **No public exposure.** Workloads have no public IPs. Administrative access goes through
-  Azure Bastion, PaaS services are reached over private endpoints, and egress leaves through
-  the firewall instead of Azure's default SNAT.
-- **Name resolution across the boundary.** A DNS Private Resolver ensures private names resolve
-  in both directions across the hybrid boundary.
+  Azure Bastion, spoke egress leaves through the firewall instead of Azure's default SNAT,
+  and Phase 4 will place PaaS access behind private endpoints.
+- **Planned name resolution across the boundary.** Phase 5 will use Azure DNS Private Resolver
+  so private names resolve in both directions across the hybrid boundary.
 - **Keyless delivery.** OIDC federation into Entra ID eliminates static credentials in the repository.
   Infrastructure changes use remote state and execute only when manually triggered in GitHub Actions.
 
@@ -73,9 +73,10 @@ Three non-overlapping ranges, chosen so the simulated on-prem datacenter looks n
 |---|---|
 | [plan.md](plan.md) | The five phases, what is done, and what is deliberately not being built |
 | [docs/worklog.md](docs/worklog.md) | What was built and in what order, with the evidence |
-| [docs/decisions.md](docs/decisions.md) | Fourteen decisions as questions, each with what it was chosen over and what it gives up |
-| [docs/troubleshooting.md](docs/troubleshooting.md) | Ten failures grouped by phase, with the real error, the root cause and the fix |
+| [docs/decisions.md](docs/decisions.md) | Fifteen decisions as questions, each with what it was chosen over and what it gives up |
+| [docs/troubleshooting.md](docs/troubleshooting.md) | Thirteen failures grouped by phase, with the real error, the root cause and the fix |
 | [docs/terraform-patterns.md](docs/terraform-patterns.md) | The map, flatten and for_each pattern, and where it leaks |
+| [docs/validation/README.md](docs/validation/README.md) | Phase-by-phase control-plane and data-plane evidence, including the Phase 3 firewall decisions |
 
 ---
 

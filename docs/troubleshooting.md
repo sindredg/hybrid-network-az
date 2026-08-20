@@ -19,9 +19,10 @@ Grouped by the phase they were hit in. Phase numbering follows [plan.md](../plan
 | [7](#7-apply-step-silently-skipped) | 0 | Deploy job green, nothing deployed | Leftover `if` condition after changing triggers | Fixed |
 | [8](#8-provider-rejects-ed25519-ssh-keys) | 2 | `the provided ssh-ed25519 SSH key is not supported` | Provider-side validation, not an Azure limit | Fixed |
 | [9](#9-vm-size-not-available-in-the-region) | 2 | `SkuNotAvailable` for `Standard_B1s` | Subscription capacity restriction on the whole v1 B-series | Fixed |
-| [10](#10-bastion-cannot-reach-the-on-premises-vnet) | 2 | "The target machine is unreachable" | Bastion has no data path over a gateway connection | Open, workaround in place |
-| [11](#11-error-unsupported-block-type) | 3 | "Error: Unsupported block type" | Error on terraform apply after upgrating to 5.X | Ficed |
-| [12](#12-publicipCountlimitreached) | 3 | "PublicIPCountLimitReached" | Public IP quote in sweden central reached | Fixed |
+| [10](#10-bastion-cannot-reach-the-on-premises-vnet) | 2 | "The target machine is unreachable" | Bastion has no resource-ID data path over a gateway connection | Resolved by Phase 3 redesign |
+| [11](#11-terraform-plan-reports-unsupported-block-type) | 3 | `Error: Unsupported block type` | Legacy diagnostic metric block rejected after upgrading to AzureRM 5.x | Fixed |
+| [12](#12-deployment-failed-with-publicipcountlimitreached) | 3 | `PublicIPCountLimitReached` | Sweden Central regional public-IP quota reached | Fixed |
+| [13](#13-nmap-and-nc-report-ports-80-and-443-open-despite-deny-rules) | 3 | `nmap` and `nc` report web ports open | TCP establishment is not proof of a permitted Layer 7 request | Explained and validated |
 
 ---
 
@@ -408,7 +409,7 @@ Two related checks worth running at the same time. Regional vCPU quota was 4, an
 
 ### 10. Bastion cannot reach the on-premises VNet
 
-**Status: open**, with a workaround. Recorded because the diagnosis took three attempts and the portal's error message points at the wrong thing.
+**Status: resolved operationally in Phase 3.** The cross-gateway service limitation remains documented because the diagnosis took three attempts and the portal's error message points at the wrong thing.
 
 **Symptom**
 
@@ -431,9 +432,11 @@ The real cause is that `vnet-hub` and `vnet-onprem` are joined by a gateway conn
 
 The `168.63.129.16` in the message is Azure's platform address and generic boilerplate. It is not the source Bastion connects from, and chasing it wastes time.
 
-**Workaround**
+**Resolution and earlier workaround**
 
-SSH from `vm-spoke` instead, which the NSGs already permit and which needs no change at all. Generate a keypair on the spoke and authorise it on the on-premises VM through `az vm run-command`, so no private key is ever copied onto a VM.
+Phase 3 moved Bastion into the simulated on-premises VNet as part of the Denmark East migration. Bastion can now reach `vm-onprem` inside its own VNet, so the administrative-access problem is resolved without depending on a cross-gateway resource-ID connection.
+
+Before that redesign, the workaround was to SSH from `vm-spoke`, which the NSGs already permitted. A keypair could be generated on the spoke and authorised on the on-premises VM through `az vm run-command`, so no private key was copied onto a VM.
 
 That hop is arguably the better demonstration anyway: reaching the simulated datacenter through the spoke, across the peering, through the hub gateway and over the tunnel is the architecture doing its job, and the prompt changing from `vm-spoke` to `vm-onprem` proves it.
 
@@ -443,58 +446,96 @@ For non-interactive checks, `az vm run-command invoke` sidesteps the problem ent
 
 An NSG that is genuinely misconfigured can mask a second, unrelated blocker. Prove each layer separately: `test-ip-flow` for the rules, `show-next-hop` for the routing. Fixing the first and assuming you are done is how one problem becomes three attempts.
 
+## Phase 3: Azure Firewall, forced routing and regional migration
+
+### 11. Terraform plan reports `Unsupported block type`
+
+**Symptom**
+
+Terraform rejected the diagnostic-setting configuration after the repository moved to AzureRM 5.x.
+
+![Terraform plan reporting an unsupported block type](images/error-unsupported-block-type.png)
+
+**Root cause**
+
+The diagnostic setting still contained the legacy `metric` block used to set `enabled = false`. AzureRM 5.x removed that block shape, so Terraform rejected the configuration before it could build a plan.
+
+**Fix**
+
+Remove the obsolete block. The Phase 3 diagnostic setting now declares only the required `AZFWNetworkRule` and `AZFWApplicationRule` log categories.
+
+**Lesson**
+
+A major provider constraint such as `~> 5.0` is an explicit migration decision. Run `terraform validate` against the locked provider and review the provider upgrade guide before relying on configuration written for the previous major version.
+
+---
+
+### 12. Deployment failed with `PublicIPCountLimitReached`
+
+**Symptom**
+
+Terraform failed while creating the firewall public IP in Sweden Central.
+
+![Terraform apply failing because the Sweden Central public-IP quota was exhausted](images/pip-limit-reached.png)
+
+**Root cause**
+
+The subscription's regional public-IP quota was already consumed by the two VPN gateways and Azure Bastion. Adding the Azure Firewall public IP exceeded the Sweden Central limit.
+
+**Fix**
+
+Move the simulated on-premises VNet, VPN gateway, workload VM, and Bastion to Denmark East. The hub VPN gateway and Azure Firewall remain in Sweden Central, distributing the four public IPs evenly across the two regions.
+
+**Lesson**
+
+Check regional quotas before placing gateways, firewalls, and Bastion in one region. In this lab the constraint improved the architecture: the simulated datacenter is now geographically separate from the Azure estate.
+
+---
+
+### 13. `nmap` and `nc` report ports 80 and 443 open despite deny rules
+
+**Symptom**
+
+From `vm-onprem`, `nmap` reported ports 22, 80, and 443 as open on `vm-spoke`, and `nc -vz` completed TCP connections to ports 80 and 443. Neither VM runs a web service, and the workload NSGs do not allow those ports.
+
+![nmap reporting ports 80 and 443 as open](images/nmap-http-https.png)
+
+![netcat reporting successful TCP connections to ports 80 and 443](images/phase3-tcp-handshake-false-positive.png)
+
+**Root cause**
+
+The test measured TCP connection establishment, not end-to-end application access. Azure Firewall performs application-layer processing and can accept or intercept a TCP connection before returning its final HTTP or TLS decision. Raw-IP HTTPS also lacks the hostname needed for SNI matching, so it is denied with `SNI TLS extension was missing`.
+
+**Fix and proof**
+
+Test the application protocol and inspect the firewall logs:
+
+```bash
+curl -v -m 5 http://10.1.0.4
+```
+
+![HTTP request receiving Azure Firewall status 470 and a default deny](images/phase3-firewall-http-deny.png)
+
+The response is HTTP `470`, `Action: Deny`, `Reason: No rule matched`. Log Analytics records the same flow as a default deny.
+
+![Azure Firewall application-rule logs showing the deciding rules](images/phase3-application-rule-logs.png)
+
+**Lesson**
+
+An open TCP handshake is not proof that an application is reachable through a Layer 7 firewall. Use a protocol-aware request and correlate it with firewall logs. For HTTPS application rules, test with a real hostname and SNI rather than a bare IP address.
+
 ---
 
 ## Patterns worth carrying forward
 
-Ten failures, and four shapes between them.
+Thirteen failures now fall into five recurring shapes.
 
-**Platform deprecations show up as apply-time failures.** Items 3, 5, 6 and 9 were all Azure withdrawing something, and none were visible to `validate` or `plan`. The provider does not know what the platform has stopped allowing.
+**Platform and provider deprecations surface at different stages.** Items 3, 5, 6 and 9 were rejected by Azure during apply, while item 11 was rejected locally by the AzureRM 5.x schema. Validation must cover both the locked provider and the live platform.
 
 **Silence is worse than errors.** Items 1 and 7 cost more time than any loud failure. A hang and a skipped step give nothing to search for.
 
 **Exact-string matching fails unhelpfully.** Item 2 reported a missing record when the record existed with a different value. Anything matching on an exact string will rarely say "close, but different".
 
-**Error messages name the wrong layer.** Item 8 blamed Azure for a provider check; item 10 blamed NSG rules for a routing limitation. Both were solved by testing each layer independently rather than trusting the message's diagnosis.
+**Error messages often name only one layer.** Item 8 blamed Azure for a provider check; item 10 looked like an NSG problem but was a routing limitation. Both were solved by testing each layer independently.
 
----
-
-## Phase 3: Azure Firewall, forced routing, on-prem migratuion
-
-### 1. Terraform plan gave "Error: Unsupported block type"
-
-**Symptom**
-
-A sudden pipeline or apply failure during an infrastructure update after adopting a newer provider version.
-
-![Plan: Error Unsupported block type](images/error-unsupported-block-type.png)
-
-
-**Root cause**
-
-This was a direct consequence of upgrading to azurerm provider version 5.x. In major provider updates, breaking changes often include completely removing legacy syntax. The traditional metric block structure (used here to explicitly set enabled = false) has been deprecated and stripped out entirely in version 5.x, causing the parser to flag it as an unrecognized block type.
-
-**Fix**
-Removed the legacy metric block entirely from the resource, relying on the modern provider behavior where metrics remain disabled by default unless explicitly configured via new syntax:
-
----
-
-### 2. Deployment failed with "PublicIPCountLimitReached"
-
-**Symptom**
-
-A Terraform apply failure during infrastructure provisioning, throwing a quota limit error in the primary region (swedencenral).
-
-![pip limit reached](images/pip-limit-reached.png)
-
-**Root cause**
-
-Azure subscriptions regional limit on Public IP addresses. Placing the Hub VPN Gateways, Azure Firewall, and Azure Bastion all inside Sweden Central simultaneously exceeded this regional ceiling.
-
-**Fix**
-
-Migrated Azure Bastion and the On-Premises workloads, network and VPN Gateway to Denmark East, distributing the four total Public IPs evenly (two in Sweden Central, two in Denmark East) to comply with regional quotas.
-
-**Lesson**
-
-Always verify regional default service limits early in the design phase—especially for quota-constrained resources like Public IPs—rather than assuming a single region can host all central hub and management components. (all though in this scenario it actually led to an even more realistic scenario for simulating an external network / on-prem DC in another region/country)
+**A successful handshake is not a successful application request.** Item 13 looked like an NSG or firewall bypass until an HTTP request and the firewall logs showed the real Layer 7 decision.
