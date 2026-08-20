@@ -86,7 +86,7 @@ Kept short on purpose. The value is in the reasoning, not the ceremony.
 
 **Why:** the map reads as an address plan on its own. Adding a network becomes a data change rather than a code change.
 
-**Trade-off:** plan output is noisier, errors point at the loop rather than the offending entry, and map keys are part of the state address, so renaming a key destroys and recreates the resource. On a gateway that means 40 minutes. Written up in full in [terraform-patterns.md](terraform-patterns.md).
+**Trade-off:** plan output is noisier, errors point at the loop rather than the offending entry, and map keys are part of the state address, so renaming a key destroys and recreates the resource. On a gateway that means 40 minutes. Written up in full in [Terraform loops and collection patterns](terraform/patterns.md).
 
 **Status:** accepted. Worth re-evaluating if individual networks start needing genuinely different treatment.
 

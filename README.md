@@ -75,7 +75,8 @@ Three non-overlapping ranges, chosen so the simulated on-prem datacenter looks n
 | [docs/worklog.md](docs/worklog.md) | What was built and in what order, with the evidence |
 | [docs/decisions.md](docs/decisions.md) | Fifteen decisions as questions, each with what it was chosen over and what it gives up |
 | [docs/troubleshooting.md](docs/troubleshooting.md) | Seventeen failures and diagnostic traps grouped by phase, with the real error, root cause, and fix |
-| [docs/terraform-patterns.md](docs/terraform-patterns.md) | The map, flatten and for_each pattern, and where it leaks |
+| [docs/terraform/README.md](docs/terraform/README.md) | Where Terraform configuration belongs, module boundaries, typed contracts, and the safe change workflow |
+| [docs/terraform/patterns.md](docs/terraform/patterns.md) | Loops, collections, `flatten()`, `for_each`, dynamic blocks, and a concrete subnet walkthrough |
 | [docs/validation/README.md](docs/validation/README.md) | Phase-by-phase control-plane and data-plane evidence through Phase 4 Private Link |
 
 ---

@@ -2,13 +2,22 @@ locals {
   location            = var.location
   resource_group_name = var.resource_group_name
 
+  # Environment-specific DNS values live here rather than inside module logic.
+  onprem_workload_ip = "192.168.1.4"
+  dns_config = {
+    resolver_inbound_ip = "10.0.3.4"
+    onprem_zone         = "corp.internal."
+    onprem_dns_server   = local.onprem_workload_ip
+    test_record_name    = "app.corp.internal"
+  }
+
   networks = {
     onprem = {
       name          = "vnet-onprem"
-      location      = "denmarkeast" # <-- Moved to Denmark East
+      location      = "denmarkeast" # Simulated datacenter region
       address_space = ["192.168.0.0/16"]
       has_gateway   = true
-      dns_servers   = var.deploy_dns ? ["10.0.3.4"] : []
+      dns_servers   = var.deploy_dns ? [local.dns_config.resolver_inbound_ip] : []
       subnets = {
         GatewaySubnet         = { prefix = "192.168.0.0/24" }
         snet-onprem-workloads = { prefix = "192.168.1.0/24" }
@@ -18,7 +27,7 @@ locals {
 
     hub = {
       name          = "vnet-hub"
-      location      = "swedencentral" # Stays in Sweden Central
+      location      = "swedencentral" # Shared-services region
       address_space = ["10.0.0.0/16"]
       has_gateway   = true
       subnets = {
@@ -31,7 +40,7 @@ locals {
 
     spoke = {
       name          = "vnet-spoke"
-      location      = "swedencentral" # Stays in Sweden Central
+      location      = "swedencentral" # Workload region
       address_space = ["10.1.0.0/16"]
       has_gateway   = false
       subnets = {
@@ -43,8 +52,12 @@ locals {
 
   # Reserved: AzureFirewallManagementSubnet 10.0.4.0/26, only for the Basic firewall SKU.
 
-  # The spoke has no gateway. Looping over all networks is what created pip-vpn-spoke.
-  gateway_networks = { for k, v in local.networks : k => v if v.has_gateway }
+  # Only networks that terminate a tunnel receive VPN resources.
+  gateway_networks = {
+    for network_key, network_config in local.networks :
+    network_key => network_config
+    if network_config.has_gateway
+  }
 
   # One entry per direction. Peering is not symmetric: each side declares its own flags.
   peerings = [
@@ -61,16 +74,30 @@ locals {
   # Compute is opt-in. An empty map means the VM loops produce nothing.
   workload_vms = var.deploy_workloads ? {
     onprem = {
-      name       = "vm-onprem"
-      subnet_key = "onprem-snet-onprem-workloads"
-      private_ip = "192.168.1.4"
-      location   = "denmarkeast" # Matches the Denmark East on-prem VNet
+      name            = "vm-onprem"
+      subnet_key      = "onprem-snet-onprem-workloads"
+      private_ip      = local.onprem_workload_ip
+      location        = "denmarkeast" # Matches the Denmark East on-prem VNet
+      enable_identity = false
+      custom_data     = <<-EOF
+        #cloud-config
+        packages: [dnsmasq]
+        write_files:
+          - path: /etc/dnsmasq.d/lab.conf
+            content: |
+              listen-address=0.0.0.0
+              bind-interfaces
+              address=/${local.dns_config.test_record_name}/${local.onprem_workload_ip}
+        runcmd: [systemctl restart dnsmasq]
+      EOF
     }
     spoke = {
-      name       = "vm-spoke"
-      subnet_key = "spoke-snet-spoke-workloads"
-      private_ip = "10.1.0.4"
-      location   = "swedencentral" # Matches the Sweden Central spoke VNet
+      name            = "vm-spoke"
+      subnet_key      = "spoke-snet-spoke-workloads"
+      private_ip      = "10.1.0.4"
+      location        = "swedencentral" # Matches the Sweden Central spoke VNet
+      enable_identity = true
+      custom_data     = null
     }
   } : {}
 
@@ -79,6 +106,7 @@ locals {
   # permits everything from peered VNets and across the tunnel.
   network_security_groups = {
     onprem-workloads = {
+      vnet_key   = "onprem"
       subnet_key = "onprem-snet-onprem-workloads"
       rules = [
         { name = "allow-ssh-from-spoke", priority = 100, protocol = "Tcp", port = "22", source = "10.1.0.0/24" },
@@ -89,6 +117,7 @@ locals {
       ]
     }
     spoke-workloads = {
+      vnet_key   = "spoke"
       subnet_key = "spoke-snet-spoke-workloads"
       rules = [
         # Admin reaches the spoke by hopping from the on-prem workload across the tunnel; no bastion in this region.

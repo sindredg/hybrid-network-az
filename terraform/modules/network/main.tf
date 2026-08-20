@@ -2,36 +2,35 @@
 
 locals {
   all_subnets = flatten([
-    for vnet_key, vnet_val in var.networks : [
-      for subnet_name, subnet in vnet_val.subnets : {
-        key            = "${vnet_key}-${subnet_name}"
-        vnet_key       = vnet_key
+    for network_key, network_config in var.networks : [
+      for subnet_name, subnet_config in network_config.subnets : {
+        key            = "${network_key}-${subnet_name}"
+        vnet_key       = network_key
         subnet_name    = subnet_name
-        address_prefix = subnet.prefix
-        delegation     = try(subnet.delegation, null)
+        address_prefix = subnet_config.prefix
+        delegation     = subnet_config.delegation
       }
     ]
   ])
 
-  # Map each NSG to its corresponding VNet location
+  # Each NSG names its VNet explicitly; no subnet-key string parsing is needed.
   nsg_locations = {
-    for k, v in var.network_security_groups : k => lookup(
-      var.networks[split("-", v.subnet_key)[0]], "location", var.location
-    )
+    for nsg_key, nsg_config in var.network_security_groups :
+    nsg_key => coalesce(var.networks[nsg_config.vnet_key].location, var.location)
   }
 }
 
 resource "azurerm_virtual_network" "vnet" {
   for_each            = var.networks
   name                = each.value.name
-  location            = lookup(each.value, "location", var.location) # Uses custom location or defaults to root
+  location            = coalesce(each.value.location, var.location)
   resource_group_name = var.resource_group_name
   address_space       = each.value.address_space
-  dns_servers         = try(each.value.dns_servers, [])
+  dns_servers         = each.value.dns_servers
 }
 
 resource "azurerm_subnet" "subnet" {
-  for_each             = { for s in local.all_subnets : s.key => s }
+  for_each             = { for subnet in local.all_subnets : subnet.key => subnet }
   name                 = each.value.subnet_name
   resource_group_name  = var.resource_group_name
   virtual_network_name = azurerm_virtual_network.vnet[each.value.vnet_key].name
@@ -62,7 +61,7 @@ resource "azurerm_network_security_group" "nsg" {
       name                       = security_rule.value.name
       priority                   = security_rule.value.priority
       direction                  = "Inbound"
-      access                     = try(security_rule.value.access, "Allow")
+      access                     = security_rule.value.access
       protocol                   = security_rule.value.protocol
       source_port_range          = "*"
       destination_port_range     = security_rule.value.port

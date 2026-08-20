@@ -14,7 +14,6 @@ module "network" {
 module "connectivity" {
   source              = "./modules/connectivity"
   resource_group_name = azurerm_resource_group.rg.name
-  location            = azurerm_resource_group.rg.location
   gateway_networks    = local.gateway_networks
   subnet_ids          = module.network.subnet_ids
   connections         = local.connections
@@ -26,7 +25,6 @@ module "compute" {
   count               = var.deploy_workloads ? 1 : 0
   source              = "./modules/compute"
   resource_group_name = azurerm_resource_group.rg.name
-  location            = azurerm_resource_group.rg.location
   subnet_ids          = module.network.subnet_ids
   workload_vms        = local.workload_vms
   bastion_location    = local.networks.onprem.location
@@ -61,7 +59,7 @@ module "routing" {
 # Stays at root: it wires two modules together, and the spoke side must wait for
 # the hub gateway or Azure rejects use_remote_gateways.
 resource "azurerm_virtual_network_peering" "this" {
-  for_each = { for p in local.peerings : p.name => p }
+  for_each = { for peering in local.peerings : peering.name => peering }
 
   name                         = each.value.name
   resource_group_name          = azurerm_resource_group.rg.name
@@ -97,7 +95,7 @@ module "privatelink" {
 # when a newly created VM principal ID is not known until apply.
 resource "azurerm_role_assignment" "spoke_key_vault_secrets_user" {
   for_each = var.deploy_privatelink && var.deploy_workloads ? {
-    spoke = module.compute[0].spoke_vm_principal_id
+    spoke = module.compute[0].vm_principal_ids["spoke"]
   } : {}
 
   scope              = module.privatelink[0].vault_id
@@ -118,8 +116,8 @@ module "dns" {
   hub_vnet_id         = module.network.vnet_ids["hub"]
   inbound_subnet_id   = module.network.subnet_ids["hub-snet-dns-inbound"]
   outbound_subnet_id  = module.network.subnet_ids["hub-snet-dns-outbound"]
-  inbound_ip          = "10.0.3.4"
-  onprem_zone         = "corp.internal."
-  onprem_dns_server   = "192.168.1.4"
+  inbound_ip          = local.dns_config.resolver_inbound_ip
+  onprem_zone         = local.dns_config.onprem_zone
+  onprem_dns_server   = local.dns_config.onprem_dns_server
   linked_vnet_ids     = { hub = module.network.vnet_ids["hub"], spoke = module.network.vnet_ids["spoke"] }
 }

@@ -28,7 +28,7 @@ resource "azurerm_virtual_network_gateway" "gw" {
 }
 
 resource "azurerm_virtual_network_gateway_connection" "this" {
-  for_each = { for c in var.connections : c.name => c }
+  for_each = { for connection in var.connections : connection.name => connection }
 
   name                            = each.value.name
   location                        = var.gateway_networks[each.value.from].location # follows its originating gateway

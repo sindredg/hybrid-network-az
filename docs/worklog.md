@@ -22,7 +22,7 @@ Address plan first, resources second. Three non-overlapping ranges, the on-premi
 
 Non-overlapping matters specifically here: a tunnel and a peering both push routes into the same tables, so overlap either fails to build or builds and routes traffic somewhere unexpected.
 
-That plan went into `locals.tf` as a map, not a comment. Two resource blocks produce all three VNets and all six subnets via `flatten()`, explained in [terraform-patterns.md](terraform-patterns.md).
+That plan went into `locals.tf` as a map, not a comment. Two resource blocks produce all three VNets and all six subnets via `flatten()`, explained in [Terraform loops and collection patterns](terraform/patterns.md).
 
 Then two gateways, two connections pointing at each other, and hub-to-spoke peering with `allow_gateway_transit` on one side and `use_remote_gateways` on the other. Those two flags are the whole point: the spoke reaches on-prem through the hub's gateway rather than paying for its own.
 

@@ -1,4 +1,6 @@
-# Terraform patterns used here
+# Terraform loops and collection patterns
+
+[Terraform guide](README.md) > Loops and collection patterns
 
 This guide explains the main non-obvious pattern in the repository: turning one nested network map
 into three VNets and nine subnets. It uses one real subnet—`hub-snet-dns-inbound`—and follows it
@@ -463,33 +465,17 @@ The network module contains this local value:
 ```hcl
 locals {
   all_subnets = flatten([
-    for vnet_key, vnet_val in var.networks : [
-      for subnet_name, subnet in vnet_val.subnets : {
-        key            = "${vnet_key}-${subnet_name}"
-        vnet_key       = vnet_key
+    for network_key, network_config in var.networks : [
+      for subnet_name, subnet_config in network_config.subnets : {
+        key            = "${network_key}-${subnet_name}"
+        vnet_key       = network_key
         subnet_name    = subnet_name
-        address_prefix = subnet.prefix
-        delegation     = try(subnet.delegation, null)
+        address_prefix = subnet_config.prefix
+        delegation     = subnet_config.delegation
       }
     ]
   ])
 }
-```
-
-The same code with fully descriptive iterator names would be:
-
-```hcl
-all_subnets = flatten([
-  for network_key, network_config in var.networks : [
-    for subnet_name, subnet_config in network_config.subnets : {
-      key            = "${network_key}-${subnet_name}"
-      vnet_key       = network_key
-      subnet_name    = subnet_name
-      address_prefix = subnet_config.prefix
-      delegation     = try(subnet_config.delegation, null)
-    }
-  ]
-])
 ```
 
 Now follow only `hub → snet-dns-inbound`.
@@ -526,8 +512,8 @@ Those four values produce this one output object:
 The object carries `vnet_key = "hub"` because flattening removes the original nesting. Without that
 field, the subnet would no longer remember which VNet owns it.
 
-`try(subnet_config.delegation, null)` means “use the delegation if the attribute exists; otherwise
-use `null`.” Normal workload subnets do not need to repeat `delegation = null` in the input map.
+The module contract declares `delegation` as optional. Terraform therefore supplies `null` when a
+subnet omits it; normal workload subnets do not need to repeat `delegation = null` in the input map.
 
 ### Step 2: understand what `flatten()` changes
 
@@ -565,7 +551,7 @@ cannot be passed directly; it must become a map whose keys identify the resource
 The real subnet resource says:
 
 ```hcl
-for_each = { for s in local.all_subnets : s.key => s }
+for_each = { for subnet in local.all_subnets : subnet.key => subnet }
 ```
 
 Read it with `s` renamed:
@@ -601,7 +587,7 @@ the new map value.
 
 ```hcl
 resource "azurerm_subnet" "subnet" {
-  for_each = { for s in local.all_subnets : s.key => s }
+  for_each = { for subnet in local.all_subnets : subnet.key => subnet }
 
   name                 = each.value.subnet_name
   resource_group_name  = var.resource_group_name
@@ -660,13 +646,7 @@ therefore not cosmetic: Terraform sees the old resource key disappear and a new 
 
 ### Filter a map
 
-The root configuration contains:
-
-```hcl
-gateway_networks = { for k, v in local.networks : k => v if v.has_gateway }
-```
-
-The readable equivalent is:
+The root configuration filters the network map with descriptive iterator names:
 
 ```hcl
 gateway_networks = {
