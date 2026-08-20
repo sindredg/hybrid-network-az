@@ -22,13 +22,6 @@ resource "azurerm_key_vault" "lab" {
   }
 }
 
-# Terraform writes this and never reads it back, so the vault can stay private.
-resource "azurerm_key_vault_secret" "demo" {
-  name         = "demo-secret"
-  value        = "written-by-terraform-never-read-back"
-  key_vault_id = azurerm_key_vault.lab.id
-}
-
 resource "azurerm_private_dns_zone" "kv" {
   name                = "privatelink.vaultcore.azure.net"
   resource_group_name = var.resource_group_name
