@@ -36,7 +36,11 @@ The firewall and Bastion subnets were carved now despite being empty, because bo
 
 ![Custom role HybridNetworkLabTFDeployer assigned to sp-github-actions-hybrid-lab](images/azure-custom-role-assignment.png)
 
-Custom role rather than Contributor. Not because it is minimal, it grants provider wildcards, but because it cannot create role assignments, so a compromised pipeline cannot widen its own access. See [decisions.md](decisions.md#4-why-a-custom-rbac-role-instead-of-contributor).
+Custom role rather than Contributor. It grants provider wildcards but not unrestricted
+`roleAssignments/write`, so the pipeline cannot grant itself Owner or arbitrary roles. Phase 4 later
+added the separate, condition-limited `Key Vault Data Access Administrator` role, which permits only
+supported Key Vault data-plane role delegation. See
+[decisions.md](decisions.md#4-why-a-custom-rbac-role-instead-of-contributor).
 
 ![Federated credentials: gh-actions-main and gh-actions-pr](images/azure-federated-credentials.png)
 
@@ -226,3 +230,65 @@ The initial `nmap` result appeared to show ports 80 and 443 open. Follow-up `nc`
 The complete evidence and interpretation are in [validation/phase-3-route+firewall.md](validation/phase-3-route+firewall.md).
 
 **End state:** Azure Firewall Standard, symmetric UDRs, explicit ICMP/SSH allows, default application denies, diagnostic logging, and a two-region hybrid topology. Phase 3 is complete.
+
+---
+
+## Phase 4: Private Link and Key Vault
+
+Phase 4 gave the spoke workload a private PaaS path: a Key Vault with public access disabled, a
+private endpoint in `snet-privatelink`, a private DNS record, and managed-identity authorization for
+`vm-spoke`.
+
+### Build and pipeline corrections
+
+The implementation introduced the `random` provider for the globally unique vault name and updated
+the lock file for Linux runner platforms. Two configuration mistakes were caught by plan before
+deployment: the private DNS VNet link used legacy arguments that AzureRM 5.x rejected, and VM
+`custom_data` had been nested inside an identity block instead of placed at virtual-machine resource
+scope.
+
+The first apply then failed while Terraform checked the proposed `demo-secret` resource. The GitHub
+Actions identity had no Key Vault secret data-plane assignment, and a GitHub-hosted runner is outside
+the private network in any case.
+
+![Terraform apply failing while checking the private Key Vault secret](images/phase4-ci-secret-rbac-failure.png)
+
+The secret resource was removed. Phase 4 now keeps the Key Vault demo secret out of Terraform and
+tests the real workload pattern instead: the VM requests a token from IMDS and calls Key Vault over
+the private endpoint. The VPN pre-shared key remains a sensitive Terraform input and, by design, is
+still present in protected Terraform state.
+
+### Workload RBAC
+
+The first call from `vm-spoke` proved DNS and network reachability but returned `ForbiddenByRbac`.
+Terraform was updated with a root-level role assignment because it wires together the VM principal
+from the compute module and the vault ID from the Private Link module. The deployment identity was
+bootstrapped at subscription scope with `Key Vault Data Access Administrator`. That built-in role
+uses a condition to limit delegation to Key Vault data-plane roles; Terraform then assigned the
+built-in `Key Vault Secrets User` role to the system-assigned VM identity at vault scope.
+
+The follow-up deployment completed successfully:
+
+![Successful Terraform deployment after the Phase 4 corrections](images/phase4-deploy-success.png)
+
+### Validation outcome
+
+From `vm-spoke`:
+
+- the vault FQDN resolves through `privatelink.vaultcore.azure.net` to `10.1.1.4`;
+- IMDS returns a Key Vault access token for the system-assigned identity;
+- the pre-assignment request is denied with `ForbiddenByRbac`;
+- the post-assignment secret-list request returns HTTP 200; and
+- `x-ms-keyvault-network-info` reports `conn_type=PrivateLink`, `pe-keyvault`, and source `10.1.0.4`.
+
+Portal evidence also shows public network access disabled, the private endpoint approved, the A
+record at `10.1.1.4`, and the `Key Vault Secrets User` assignment for `vm-spoke`.
+
+The complete command output, screenshots, and acceptance matrix are in
+[validation/phase-4-private-link.md](validation/phase-4-private-link.md).
+
+**End state:** Phase 4 is complete. No Key Vault demo secret is stored by Terraform; the empty
+successful secret list is the access proof. The private DNS zone is currently also linked directly
+to `vnet-onprem`.
+That link must be removed before Phase 5 so the DNS resolver validation cannot pass by bypassing the
+resolver.

@@ -16,13 +16,13 @@ Built with Terraform and deployed from GitHub Actions.
   force spoke-to-on-premises traffic and spoke egress through it.
 - **No public exposure.** Workloads have no public IPs. Administrative access goes through
   Azure Bastion, spoke egress leaves through the firewall instead of Azure's default SNAT,
-  and Phase 4 will place PaaS access behind private endpoints.
+  and Key Vault data-plane access uses a private endpoint with public access disabled.
 - **Planned name resolution across the boundary.** Phase 5 will use Azure DNS Private Resolver
   so private names resolve in both directions across the hybrid boundary.
 - **Keyless delivery.** OIDC federation into Entra ID eliminates static credentials in the repository.
   Infrastructure changes use remote state and execute only when manually triggered in GitHub Actions.
 
-Built incrementally in phases, with each layer validated before moving to the next. Core networking, VPN connectivity, Bastion access, and the Azure Firewall are deployed; private endpoints and the DNS resolver are next.
+Built incrementally in phases, with each layer validated before moving to the next. Phases 0 through 4 are complete: core networking, VPN connectivity, Bastion access, Azure Firewall, and private Key Vault access are deployed. Azure DNS Private Resolver is next.
 
 ---
 
@@ -47,7 +47,7 @@ flowchart TB
     subgraph SP["vnet-spoke - 10.1.0.0/16 - workload (swedencentral)"]
         direction TB
         SVM["snet-spoke-workloads<br/>vm-spoke"]
-        SPL["snet-privatelink<br/>private endpoint to Key Vault<br/>phase 4"]
+        SPL["snet-privatelink<br/>private endpoint to Key Vault<br/>10.1.1.4"]
     end
 
     OGW <-->|"IPsec tunnel"| HGW
@@ -58,8 +58,8 @@ flowchart TB
 
     classDef built stroke:#2da44e,stroke-width:2px,color:#e6edf3
     classDef planned stroke:#8b949e,stroke-width:1px,stroke-dasharray:4 4,color:#8b949e
-    class OGW,OVM,HGW,HBA,SVM,HFW built
-    class HDN,SPL planned
+    class OGW,OVM,HGW,HBA,SVM,HFW,SPL built
+    class HDN planned
     linkStyle 0 stroke-width:3px,stroke:#2da44e
 ```
 
@@ -74,9 +74,9 @@ Three non-overlapping ranges, chosen so the simulated on-prem datacenter looks n
 | [plan.md](plan.md) | The five phases, what is done, and what is deliberately not being built |
 | [docs/worklog.md](docs/worklog.md) | What was built and in what order, with the evidence |
 | [docs/decisions.md](docs/decisions.md) | Fifteen decisions as questions, each with what it was chosen over and what it gives up |
-| [docs/troubleshooting.md](docs/troubleshooting.md) | Thirteen failures grouped by phase, with the real error, the root cause and the fix |
+| [docs/troubleshooting.md](docs/troubleshooting.md) | Seventeen failures and diagnostic traps grouped by phase, with the real error, root cause, and fix |
 | [docs/terraform-patterns.md](docs/terraform-patterns.md) | The map, flatten and for_each pattern, and where it leaks |
-| [docs/validation/README.md](docs/validation/README.md) | Phase-by-phase control-plane and data-plane evidence, including the Phase 3 firewall decisions |
+| [docs/validation/README.md](docs/validation/README.md) | Phase-by-phase control-plane and data-plane evidence through Phase 4 Private Link |
 
 ---
 

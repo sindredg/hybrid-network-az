@@ -23,6 +23,10 @@ Grouped by the phase they were hit in. Phase numbering follows [plan.md](../plan
 | [11](#11-terraform-plan-reports-unsupported-block-type) | 3 | `Error: Unsupported block type` | Legacy diagnostic metric block rejected after upgrading to AzureRM 5.x | Fixed |
 | [12](#12-deployment-failed-with-publicipcountlimitreached) | 3 | `PublicIPCountLimitReached` | Sweden Central regional public-IP quota reached | Fixed |
 | [13](#13-nmap-and-nc-report-ports-80-and-443-open-despite-deny-rules) | 3 | `nmap` and `nc` report web ports open | TCP establishment is not proof of a permitted Layer 7 request | Explained and validated |
+| [14](#14-private-dns-zone-link-rejected-by-azurerm-5x) | 4 | Missing `private_dns_zone_id`; name and resource group unsupported | AzureRM 5.x resource schema was used with legacy arguments | Fixed |
+| [15](#15-linux-vm-reports-custom_data-as-unsupported) | 4 | `custom_data` is reported as an unsupported argument | The valid VM argument was nested inside the identity block | Fixed |
+| [16](#16-ci-cannot-manage-a-secret-in-the-private-key-vault) | 4 | Terraform gets `ForbiddenByRbac` on `demo-secret` | CI had no secret data role and runs outside the private network | Fixed by design change |
+| [17](#17-spoke-vm-reaches-key-vault-but-gets-forbiddenbyrbac) | 4 | VM token works, Key Vault request returns 403 | Managed identity had no vault data-plane role | Fixed |
 
 ---
 
@@ -526,9 +530,159 @@ An open TCP handshake is not proof that an application is reachable through a La
 
 ---
 
+## Phase 4: Private Link and Key Vault
+
+### 14. Private DNS zone link rejected by AzureRM 5.x
+
+**Symptom**
+
+```text
+Error: Missing required argument
+The argument "private_dns_zone_id" is required, but no definition was found.
+
+Error: Unsupported argument
+An argument named "resource_group_name" is not expected here.
+
+Error: Unsupported argument
+An argument named "private_dns_zone_name" is not expected here.
+```
+
+**Root cause**
+
+`azurerm_private_dns_zone_virtual_network_link` was written with name-based arguments from an older
+resource shape. With the locked AzureRM 5.x provider, the link takes the private zone resource ID
+and the VNet resource ID.
+
+**Fix**
+
+```hcl
+resource "azurerm_private_dns_zone_virtual_network_link" "kv" {
+  for_each            = var.linked_vnet_ids
+  name                = "link-${each.key}"
+  private_dns_zone_id = azurerm_private_dns_zone.kv.id
+  virtual_network_id  = each.value
+}
+```
+
+**Lesson**
+
+When Terraform reports one required argument missing and the old-looking alternatives unsupported,
+check the schema for the provider version in the lock file. This is a configuration-shape error, not
+an Azure permission or dependency error.
+
+---
+
+### 15. Linux VM reports `custom_data` as unsupported
+
+**Symptom**
+
+```text
+Error: Unsupported argument
+on modules/compute/main.tf line 40, in resource "azurerm_linux_virtual_machine" "vm":
+custom_data = each.key == "onprem" ? base64encode(...)
+An argument named "custom_data" is not expected here.
+```
+
+**Root cause**
+
+`custom_data` is valid on `azurerm_linux_virtual_machine`, but it had been placed inside the dynamic
+`identity` block. Terraform validates an argument against its immediate block, so it correctly said
+the identity block did not accept it.
+
+**Fix**
+
+Close the identity block first, then place `custom_data` at virtual-machine resource scope. The
+identity remains conditional for `vm-spoke`; the on-premises bootstrap remains conditional for
+`vm-onprem`.
+
+**Lesson**
+
+“Unsupported argument” can mean incorrect nesting rather than an unavailable feature. Read the
+surrounding braces before changing provider versions or deleting a valid argument.
+
+---
+
+### 16. CI cannot manage a secret in the private Key Vault
+
+**Symptom**
+
+Terraform apply failed while checking the proposed `demo-secret`:
+
+```text
+StatusCode=403
+Code="Forbidden"
+Action: 'Microsoft.KeyVault/vaults/secrets/getSecret/action'
+Assignment: (not found)
+InnerError={"code":"ForbiddenByRbac"}
+```
+
+![Terraform failing while checking demo-secret](images/phase4-ci-secret-rbac-failure.png)
+
+**Root cause**
+
+Key Vault secret operations use the data plane. The GitHub Actions service principal had management
+permissions for the vault resource but no secret data-plane role. Granting a secret role would only
+solve the first half of the design problem: the GitHub-hosted runner is also outside the VNets, while
+the vault has public network access disabled. The `AzureServices` firewall bypass does not turn a
+GitHub-hosted runner into a private-network caller.
+
+Terraform also refreshes managed secrets by calling `GetSecret`; “write it but never read it” is not
+a stable Terraform lifecycle.
+
+**Fix**
+
+Remove `azurerm_key_vault_secret.demo`. Terraform now manages the vault, endpoint, DNS, identity,
+and role assignment, but no secret data. Phase 4 validates the workload path with an authorized list
+request from `vm-spoke`; a real secret must be created by a caller inside the private network.
+
+**Lesson**
+
+Management-plane permission to deploy a vault is separate from data-plane permission and network
+reachability to use it. Design private PaaS tests around the workload that will consume the service,
+not around the CI runner that provisions it.
+
+---
+
+### 17. Spoke VM reaches Key Vault but gets `ForbiddenByRbac`
+
+**Symptom**
+
+DNS returned `10.1.1.4` and IMDS issued a managed-identity token, but the Key Vault request returned:
+
+```text
+"code": "Forbidden"
+"Action": "Microsoft.KeyVault/vaults/secrets/readMetadata/action"
+"Assignment": "(not found)"
+"innererror": { "code": "ForbiddenByRbac" }
+```
+
+![VM request denied before its Key Vault role assignment](images/phase4-spoke-rbac-denied.png)
+
+**Root cause**
+
+The VM had an identity but no Key Vault data-plane role. Identity creation proves who the VM is; it
+does not grant access by itself.
+
+**Fix**
+
+Add an `azurerm_role_assignment` at root, where the compute module's principal ID and the Private
+Link module's vault ID are both available. Assign the built-in `Key Vault Secrets User` role at vault
+scope, and bootstrap the deployment identity with authority to create that constrained assignment.
+
+The repeated request returned HTTP 200 and an empty secret list. The response header reported
+`conn_type=PrivateLink`, proving authorization and transport independently.
+
+**Lesson**
+
+Test private PaaS access as four separate claims: DNS, route/endpoint, token issuance, and RBAC. A
+403 after private DNS and token acquisition is useful evidence—the network path works and the fault
+is authorization.
+
+---
+
 ## Patterns worth carrying forward
 
-Thirteen failures now fall into five recurring shapes.
+Seventeen failures now fall into six recurring shapes.
 
 **Platform and provider deprecations surface at different stages.** Items 3, 5, 6 and 9 were rejected by Azure during apply, while item 11 was rejected locally by the AzureRM 5.x schema. Validation must cover both the locked provider and the live platform.
 
@@ -536,6 +690,8 @@ Thirteen failures now fall into five recurring shapes.
 
 **Exact-string matching fails unhelpfully.** Item 2 reported a missing record when the record existed with a different value. Anything matching on an exact string will rarely say "close, but different".
 
-**Error messages often name only one layer.** Item 8 blamed Azure for a provider check; item 10 looked like an NSG problem but was a routing limitation. Both were solved by testing each layer independently.
+**Error messages often name only one layer.** Item 8 blamed Azure for a provider check; item 10 looked like an NSG problem but was a routing limitation; item 15 looked like a missing feature but was block nesting. Each was solved by isolating the layer that emitted the message.
 
 **A successful handshake is not a successful application request.** Item 13 looked like an NSG or firewall bypass until an HTTP request and the firewall logs showed the real Layer 7 decision.
+
+**Identity, authorization, and network access are separate controls.** Items 16 and 17 both returned 403, but one involved the CI design and the other a missing workload role. DNS, endpoint reachability, token issuance, and RBAC need independent checks.
