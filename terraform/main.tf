@@ -31,6 +31,11 @@ module "compute" {
   vm_size             = var.vm_size
   admin_username      = var.admin_username
   admin_ssh_key       = var.admin_ssh_public_key
+
+  # vnet-onprem uses the resolver inbound endpoint as its DNS server, which is only
+  # reachable once the tunnel exists. Without this the VM boots roughly forty minutes
+  # before the gateways finish and cloud-init cannot resolve the package repositories.
+  depends_on = [module.connectivity]
 }
 
 module "firewall" {

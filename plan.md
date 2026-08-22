@@ -45,13 +45,18 @@ The validation proved:
 4. `dnsmasq` listened only on the on-premises VM address, avoiding a collision with
    `systemd-resolved` on the local stub address.
 
-The live repair is validated. The matching Terraform `custom_data` hardening was added afterward;
-its next authenticated plan may replace `vm-onprem` and must be followed by the same smoke tests.
+The live repair is validated. The matching Terraform hardening — scoped `dnsmasq` listener, bounded
+package retry, and `depends_on = [module.connectivity]` so the VM waits for the tunnel — was added
+afterward; its next authenticated plan may replace `vm-onprem` and must be followed by the same
+smoke tests.
 
 Commands, screenshots, the failure analysis, and the acceptance matrix are in
 [the Phase 5 validation record](docs/validation/phase-5-dns-resolver.md).
 
-## Next improvements
+## Deferred: what operating this would require
+
+None of these are needed to demonstrate the topology. They are what a continuously operated
+environment would add on top of it, listed so the boundary is explicit rather than implied.
 
 - Add a post-deployment smoke test that runs the two DNS assertions automatically.
 - Alert on DNS Private Resolver endpoint query-volume anomalies and endpoint health.

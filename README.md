@@ -36,7 +36,7 @@ flowchart TB
     subgraph OP["vnet-onprem - 192.168.0.0/16 - simulated datacenter (denmarkeast)"]
         direction TB
         OGW["GatewaySubnet<br/>vgw-onprem"]
-        HBA["AzureBastionSubnet<br/>admin-onprem"]
+        HBA["AzureBastionSubnet<br/>bastion-onprem"]
         OVM["snet-onprem-workloads<br/>vm-onprem"]
     end
 
@@ -50,8 +50,10 @@ flowchart TB
     subgraph SP["vnet-spoke - 10.1.0.0/16 - workload (swedencentral)"]
         direction TB
         SVM["snet-spoke-workloads<br/>vm-spoke"]
-        SPL["snet-privatelink<br/>private endpoint to Key Vault<br/>10.1.1.4"]
+        SPL["snet-privatelink<br/>private endpoint<br/>10.1.1.4"]
     end
+
+    KV["Azure Key Vault<br/>public network access disabled"]
 
     OGW <-->|"IPsec tunnel"| HGW
     HUB -->|"peering, gateway transit"| SP
@@ -59,8 +61,9 @@ flowchart TB
     SVM -.->|"UDR forces inspection<br/>phase 3"| HFW
     OVM -.->|"Azure private names<br/>inbound endpoint"| HDN
     HDN -.->|"corp.internal<br/>outbound endpoint"| OVM
+    SPL --->|"Private Link"| KV
 
-    classDef built stroke:#2da44e,stroke-width:2px,color:#e6edf3
+    classDef built stroke:#2da44e,stroke-width:2px
     class OGW,OVM,HGW,HBA,SVM,HFW,SPL,HDN built
     linkStyle 0 stroke-width:3px,stroke:#2da44e
 ```
@@ -73,7 +76,8 @@ Three non-overlapping ranges, chosen so the simulated on-prem datacenter looks n
 
 | Document | What is in it |
 |---|---|
-| [plan.md](plan.md) | The completed phases, current operating constraints, and next improvements |
+| [plan.md](plan.md) | The completed phases, current operating constraints, and what was deferred |
+| [docs/architecture.md](docs/architecture.md) | How traffic moves end to end, and which control enforces each hop |
 | [docs/worklog.md](docs/worklog.md) | What was built and in what order, with the evidence |
 | [docs/decisions.md](docs/decisions.md) | Architecture decisions as questions, each with alternatives and trade-offs |
 | [docs/troubleshooting.md](docs/troubleshooting.md) | Real failures and diagnostic traps grouped by phase, with the error, root cause, and fix |

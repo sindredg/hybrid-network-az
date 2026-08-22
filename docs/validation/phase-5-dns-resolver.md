@@ -141,7 +141,9 @@ independently captured.
 ## Evidence boundary for the Terraform hardening
 
 The screenshots validate the live configuration after its manual repair. The Terraform source was
-updated afterward to generate the same scoped `dnsmasq` configuration and retry package bootstrap.
+updated afterward to generate the same scoped `dnsmasq` configuration, to install the package from
+a bounded retry loop, and to hold VM creation until the tunnel exists via
+`depends_on = [module.connectivity]`.
 That source change is not part of the pictured seven-add, three-change apply. Because changing VM
 `custom_data` can require replacement, the next authenticated plan must be reviewed and the smoke
 tests repeated before calling the rebuild path validated.
