@@ -288,7 +288,78 @@ The complete command output, screenshots, and acceptance matrix are in
 [validation/phase-4-private-link.md](validation/phase-4-private-link.md).
 
 **End state:** Phase 4 is complete. No Key Vault demo secret is stored by Terraform; the empty
-successful secret list is the access proof. The private DNS zone is currently also linked directly
-to `vnet-onprem`.
-That link must be removed before Phase 5 so the DNS resolver validation cannot pass by bypassing the
-resolver.
+successful secret list is the access proof. Phase 5 subsequently removed the temporary direct
+private-zone link to `vnet-onprem` before testing the resolver path.
+
+---
+
+## Phase 5: Azure DNS Private Resolver
+
+Phase 5 made DNS cross the same hybrid boundary as application traffic. An inbound endpoint gives
+the simulated datacenter a stable destination for Azure private names. A separate outbound endpoint
+and forwarding ruleset send `corp.internal.` queries from hub and spoke to the DNS service on
+`vm-onprem`.
+
+### Establish the negative baseline
+
+The direct Key Vault private-zone link to `vnet-onprem` was removed first. With Azure-provided DNS
+still active, the vault name returned public addresses rather than private endpoint `10.1.1.4`.
+The spoke's explicit query for `app.corp.internal` returned `NXDOMAIN`. Those two failures made the
+later success attributable to the resolver rather than an existing DNS shortcut.
+
+![Before the resolver, vm-onprem receives public Key Vault addresses](images/phase5-pre-keyvault-public-resolution.png)
+
+### Deploy the resolver paths
+
+The manual deployment added `dnspr-hub`, inbound endpoint `10.0.3.4`, an outbound endpoint,
+`ruleset-hub`, the `corp.internal.` forwarding rule, and hub/spoke ruleset links. It also set the
+on-premises VNet DNS server to the inbound endpoint and opened UDP and TCP 53 only from the resolver
+outbound subnet to the on-premises workload subnet.
+
+![Terraform completed the Phase 5 apply](images/phase5-terraform-apply-success.png)
+
+![The resolver inbound endpoint is provisioned at 10.0.3.4](images/phase5-resolver-inbound-endpoint.png)
+
+After a VM restart renewed the DHCP-provided DNS configuration, `vm-onprem` reported `10.0.3.4` as
+its upstream and resolved the vault to `10.1.1.4`. An HTTPS request also reported `10.1.1.4` as the
+remote address, independently proving private transport.
+
+### Repair and harden the on-premises DNS target
+
+The first spoke query timed out because `dnsmasq` had not installed. Cloud-init had tried to fetch
+the package while the new VNet DNS setting already pointed at a resolver that was still being
+created. Once public resolution recovered, the package installed, but its generated
+`listen-address=0.0.0.0` collided with Ubuntu's `systemd-resolved` listener.
+
+Binding `dnsmasq` only to `192.168.1.4` fixed the socket conflict. The original `address=` rule then
+returned a correct A answer followed by `SERVFAIL` or `NXDOMAIN` for additional record types. The
+working local-record configuration became:
+
+```text
+listen-address=192.168.1.4
+bind-interfaces
+local=/corp.internal/
+host-record=app.corp.internal,192.168.1.4
+```
+
+The Terraform source now generates that configuration and retries package installation until public
+DNS is available. This hardening was written after the pictured deployment; changing `custom_data`
+may replace `vm-onprem`, so the next plan and post-apply smoke test remain the proof for rebuilds.
+
+### Validation outcome
+
+From `vm-onprem`, the Key Vault name resolves through the inbound endpoint to `10.1.1.4`. From
+`vm-spoke`, `app.corp.internal` resolves through the ruleset, outbound endpoint, IPsec tunnel, and
+`dnsmasq` to `192.168.1.4`. The ordinary lookup proves the full resolution path. An explicit TCP
+query succeeded against the spoke's local stub, while the target socket capture proves `dnsmasq`
+listens on remote TCP/53; the forwarded leg's selected transport was not independently captured.
+
+![The spoke resolves the on-premises record through the outbound path](images/phase5-post-spoke-corp-resolution.png)
+
+The full pre/post record, exact commands, portal evidence, and acceptance matrix are in
+[validation/phase-5-dns-resolver.md](validation/phase-5-dns-resolver.md). The three failures and
+their layer-by-layer diagnosis are in [troubleshooting.md](troubleshooting.md#phase-5-azure-dns-private-resolver).
+
+**End state:** all five implementation phases are complete. Hybrid DNS is explicit in both
+directions, and neither direction depends on a public workload endpoint or direct on-premises link
+to the Azure private DNS zone.

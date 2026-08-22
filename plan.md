@@ -1,11 +1,11 @@
 # Plan
 
-Current state and the next build step. Completed implementation detail lives in
+Current state and the next improvements. Completed implementation detail lives in
 [the worklog](docs/worklog.md); test evidence lives in [docs/validation](docs/validation/README.md).
 
-**Status:** Phases 0 through 4 are complete. Phase 5 is next. The hub-and-spoke network,
-cross-region IPsec tunnel, workload NSGs, symmetric firewall inspection, and private Key
-Vault access from `vm-spoke` have all been deployed and validated.
+**Status:** Phases 0 through 5 are complete. The hub-and-spoke network, cross-region IPsec tunnel,
+workload NSGs, symmetric firewall inspection, private Key Vault access, and bidirectional hybrid DNS
+have all been deployed and validated.
 
 ## Completed phases
 
@@ -16,72 +16,53 @@ Vault access from `vm-spoke` have all been deployed and validated.
 | 2 — workloads | Added private VMs, Bastion, explicit NSGs, and proved traffic crosses the tunnel in both directions | [Connectivity validation](docs/validation/phase-2-connectivity.md) |
 | 3 — inspection | Added Azure Firewall Standard, symmetric UDRs, policy rules, and diagnostic logs | [Routing and firewall validation](docs/validation/phase-3-route+firewall.md) |
 | 4 — Private Link | Added a private Key Vault endpoint, private DNS, managed identity, and vault-scoped RBAC; proved the VM reaches the vault over Private Link | [Private Link validation](docs/validation/phase-4-private-link.md) |
+| 5 — hybrid DNS | Added Azure DNS Private Resolver, inbound and outbound endpoints, a forwarding ruleset, and an on-premises DNS target; proved both resolution directions | [DNS Resolver validation](docs/validation/phase-5-dns-resolver.md) |
 
-## Constraints that still shape the design
+## Current operating constraints
 
 | Constraint | Consequence |
 |---|---|
 | GitHub-hosted runners are outside the VNets | Terraform does not manage Key Vault secrets while public access is disabled |
-| DNS resolver endpoints require dedicated delegated `/28` subnets | `snet-dns-inbound` and `snet-dns-outbound` are already reserved |
-| Azure-to-on-premises forwarding needs an on-premises DNS target | `vm-onprem` will run `dnsmasq` for `corp.internal` |
-| The resolver inbound address must be stable for the simulated site | Phase 5 pins it to `10.0.3.4` |
-| Private DNS links provide direct Azure resolution | The temporary `vnet-onprem` link must be removed before Phase 5 testing, otherwise it bypasses the resolver being demonstrated |
+| DNS resolver endpoints require dedicated delegated `/28` subnets | `snet-dns-inbound` and `snet-dns-outbound` cannot host other workloads |
+| Azure-to-on-premises forwarding needs a reachable DNS target | `vm-onprem` serves `corp.internal` on `192.168.1.4`; its listener and NSG support UDP and TCP 53 |
+| The simulated site needs a stable DNS destination | The resolver inbound endpoint is pinned to `10.0.3.4` |
+| A GitHub-hosted runner is outside the private data plane | VM and portal validation remain necessary even when Terraform plan succeeds |
 
-## Phase 5: Azure DNS Private Resolver
+## Phase 5 outcome: Azure DNS Private Resolver
 
-The resolver module, workflow input, transport rules, and validation outputs are prepared in code,
-but the resolver resources have not been deployed. Phase 5 is therefore **prepared, not complete**.
+`dnspr-hub` provides an inbound endpoint at `10.0.3.4` and an outbound endpoint connected to
+`ruleset-hub`. The ruleset is linked to hub and spoke and forwards `corp.internal.` to
+`192.168.1.4:53`. The direct Key Vault private-zone link to `vnet-onprem` was removed, so the
+on-premises success case must pass through the inbound endpoint.
 
-### Prepared in code
+The validation proved:
 
-1. The Key Vault private DNS zone remains linked to `hub` and `spoke`, but no longer links directly
-   to `onprem`.
-2. The deploy workflow exposes `deploy_dns` and maps it to `TF_VAR_deploy_dns`.
-3. The `vm-onprem` definition installs `dnsmasq` and serves `app.corp.internal` at `192.168.1.4`.
-4. The on-premises workload NSG permits both UDP/53 and TCP/53 from the resolver outbound subnet.
-5. Root outputs expose the resolver, inbound endpoint, outbound endpoint, and forwarding ruleset
-   names or addresses needed for validation.
+1. Before deployment, on-premises Azure-provided DNS returned public Key Vault addresses and the
+   spoke could not resolve `app.corp.internal`.
+2. After deployment, `vm-onprem` used `10.0.3.4` and resolved the vault to private endpoint
+   `10.1.1.4`.
+3. `vm-spoke` resolved `app.corp.internal` to `192.168.1.4` through the outbound path.
+4. `dnsmasq` listened only on the on-premises VM address, avoiding a collision with
+   `systemd-resolved` on the local stub address.
 
-### Rollout sequence
+The live repair is validated. The matching Terraform `custom_data` hardening was added afterward;
+its next authenticated plan may replace `vm-onprem` and must be followed by the same smoke tests.
 
-Use two manual deploy runs so the negative baseline is genuine. In both runs, keep
-`deploy_workloads`, `deploy_firewall`, and `deploy_privatelink` checked; leaving a completed phase
-unchecked asks Terraform to remove it.
+Commands, screenshots, the failure analysis, and the acceptance matrix are in
+[the Phase 5 validation record](docs/validation/phase-5-dns-resolver.md).
 
-1. Run the workflow with `deploy_dns` unchecked. This removes the direct `onprem` private-zone link
-   and adds TCP/53 without creating the resolver.
-2. On `vm-onprem`, run `sudo resolvectl flush-caches`, then query the Key Vault FQDN explicitly
-   against Azure-provided DNS with `nslookup <vault-name>.vault.azure.net 168.63.129.16`. Record that
-   it does not return the private endpoint address `10.1.1.4`.
-3. Run the workflow again with all four deployment inputs checked, including `deploy_dns`.
-4. Restart `vm-onprem` from Azure after the VNet DNS setting changes so its DHCP lease receives
-   `10.0.3.4` as the DNS server. Confirm the active upstream with `resolvectl status` before testing.
-5. Perform the two-direction validation below.
+## Next improvements
 
-### Deploy
-
-- `dnspr-hub` in `vnet-hub`.
-- Inbound endpoint at `10.0.3.4` in `snet-dns-inbound`.
-- Outbound endpoint in `snet-dns-outbound`.
-- `ruleset-hub`, linked to hub and spoke, forwarding `corp.internal.` to `192.168.1.4:53`.
-- `vnet-onprem` custom DNS set to `10.0.3.4`.
-
-### Validate
-
-Capture both directions and the negative baseline:
-
-1. Before deployment, show that `vm-onprem` does not resolve the Key Vault private address after
-   the direct zone link is removed.
-2. After deployment, resolve the vault FQDN from `vm-onprem` and receive `10.1.1.4`.
-3. From an Azure VM, resolve the `corp.internal` test record served by `vm-onprem`.
-4. In the portal, capture the resolver, inbound/outbound endpoints, forwarding rule, ruleset links,
-   and the on-premises VNet DNS setting.
-5. Run `terraform plan` again with the same phase flags and confirm no unexpected changes.
+- Add a post-deployment smoke test that runs the two DNS assertions automatically.
+- Alert on DNS Private Resolver endpoint query-volume anomalies and endpoint health.
+- Tighten the CI deployment role from provider-level wildcards to the actions observed in use.
+- Move the Terraform backend to Entra ID data-plane authentication instead of storage account keys.
+- Add drift detection before treating this lab pattern as a continuously operated environment.
 
 ## Deliberately out of scope
 
-- BGP and point-to-site remote-worker simulation until the five-phase path is complete.
-- AKS, Application Gateway, Front Door, and Firewall Premium; they dilute the networking story.
+- BGP and point-to-site remote-worker simulation; neither is needed to prove this topology.
+- AKS, Application Gateway, Front Door, and Firewall Premium; they dilute the networking focus.
 - Multiple environments and workspaces; this repository represents one lab environment.
 - Further module splitting until another spoke or repeated service creates real reuse.
 
@@ -89,5 +70,5 @@ Capture both directions and the negative baseline:
 
 A reader can trace the path from the simulated datacenter to Azure, identify the control enforcing
 each hop, and reproduce the evidence. The final Phase 5 proof is private Key Vault name resolution
-from `vm-onprem` through Azure DNS Private Resolver, without a direct private-zone link to the
-on-premises VNet.
+from `vm-onprem` through Azure DNS Private Resolver without a direct private-zone link, plus
+`corp.internal` resolution from the spoke through the outbound endpoint and the IPsec tunnel.
