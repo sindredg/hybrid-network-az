@@ -708,10 +708,12 @@ healthy.
 **Fix**
 
 After `nslookup archive.ubuntu.com` succeeded, running `apt-get update` and installing `dnsmasq`
-recovered the live VM. The Terraform source now writes the configuration first and uses a bounded
-cloud-init retry loop: it waits for public resolution, then updates APT, installs the package, and
-enables the service. That hardening was added after the captured deployment and still needs its next
-plan and post-apply smoke test.
+recovered the live VM. The Terraform source now removes the race structurally: `module.compute` declares
+`depends_on = [module.connectivity]`, so no VM is created until both gateways and the tunnel
+exist and `10.0.3.4` answers at first boot. As a second layer, cloud-init installs `dnsmasq` from
+a bounded `runcmd` retry loop rather than the one-shot `packages` module, which does not
+re-attempt after resolution becomes healthy. Both changes were made after the captured
+deployment and have not yet been proven by a rebuild.
 
 **Lesson**
 
@@ -755,8 +757,10 @@ bind-interfaces
 ```
 
 After restart, `ss -luntp` showed `dnsmasq` on UDP and TCP `192.168.1.4:53`, while
-`systemd-resolved` retained its loopback sockets. Terraform now declares the scoped listener for the
-next VM build; the screenshot validates the equivalent live repair.
+`systemd-resolved` retained its loopback sockets. Terraform now declares the scoped listener in
+[`terraform/locals.tf`](../terraform/locals.tf), interpolated from `local.onprem_workload_ip` so
+the listener and the NIC address cannot drift apart. The screenshot validates the equivalent live
+repair; the generated file has not yet been re-checked on a fresh build.
 
 **Lesson**
 
