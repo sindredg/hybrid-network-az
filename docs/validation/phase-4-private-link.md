@@ -134,10 +134,9 @@ The response is `HTTP/1.1 200 OK`. The `x-ms-keyvault-network-info` header inclu
 | Vault request after RBAC | HTTP 200 | Empty secret list returned | Pass |
 | Network path | Private Link | Header reports `conn_type=PrivateLink` | Pass |
 
-## Phase boundary and Phase 5 prerequisite
+## Phase boundary
 
-The current Terraform also links the private DNS zone directly to `vnet-onprem`. That is not needed
-for Phase 4 and would let the simulated datacenter resolve the vault without Azure DNS Private
-Resolver. Before Phase 5 validation, remove that direct link and capture the failed on-premises
-lookup as the negative baseline. The Phase 5 success case must then be attributable to the resolver,
-not to a shortcut already present in Phase 4.
+Phase 5 removed the temporary direct private-zone link to `vnet-onprem` before recording its
+negative baseline. The later on-premises private resolution is therefore attributable to Azure DNS
+Private Resolver rather than a Phase 4 shortcut. See
+[the Phase 5 validation](phase-5-dns-resolver.md).

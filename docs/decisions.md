@@ -227,3 +227,26 @@ Moving all Key Vault secret data operations out of Terraform removes the conflic
 **Trade-off:** modules and resources must use per-network locations rather than assuming one root location, and the VNet-to-VNet tunnel now crosses regions.
 
 **Status:** implemented and validated in Phase 3.
+
+---
+
+## 16. Why use DNS Private Resolver instead of linking the private zone directly to on-premises?
+
+**Chosen:** Azure DNS Private Resolver in the hub, with inbound endpoint `10.0.3.4` for Azure private
+names and an outbound endpoint plus forwarding ruleset for `corp.internal.`.
+
+**Over:** directly linking the Key Vault private DNS zone to `vnet-onprem`, or running a general
+DNS-forwarder VM in the Azure hub.
+
+**Why:** the direct VNet link only works because the simulated datacenter happens to be an Azure
+VNet. Real on-premises DNS cannot attach to an Azure Private DNS zone. The resolver exposes a private
+IP that a site DNS server can forward to, while the outbound path lets Azure query namespaces owned
+by the site. It therefore demonstrates the boundary in both directions without maintaining another
+DNS VM in the hub.
+
+**Trade-off:** the resolver requires two dedicated delegated `/28` subnets, a ruleset and links, and
+working UDP and TCP 53 paths to the on-premises DNS target. DNS changes also depend on DHCP renewal
+or a VM restart before guests use the new VNet DNS setting.
+
+**Status:** implemented and validated in Phase 5. The temporary direct on-premises private-zone link
+was removed before the negative baseline was recorded.

@@ -9,9 +9,10 @@ Evidence that each phase works, captured as it was run. One file per phase.
 | 2 | [phase-2-connectivity.md](phase-2-connectivity.md) | Traffic crosses the tunnel and the NSGs are scoped |
 | 3 | [phase-3-route+firewall.md](phase-3-route+firewall.md) | UDRs define symmetric routing; application allows and default denies are logged |
 | 4 | [phase-4-private-link.md](phase-4-private-link.md) | Key Vault resolves privately; managed identity and RBAC succeed over Private Link |
+| 5 | [phase-5-dns-resolver.md](phase-5-dns-resolver.md) | Inbound and outbound hybrid DNS resolution succeeds across the tunnel |
 
-Phase 5 is prepared but not deployed; its remaining work and acceptance checks are tracked in
-[plan.md](../../plan.md#phase-5-azure-dns-private-resolver).
+All five implementation phases are deployed and validated. Remaining operational improvements are
+tracked in [plan.md](../../plan.md#next-improvements).
 
 ---
 

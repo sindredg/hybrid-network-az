@@ -17,12 +17,15 @@ Built with Terraform and deployed from GitHub Actions.
 - **No public exposure.** Workloads have no public IPs. Administrative access goes through
   Azure Bastion, spoke egress leaves through the firewall instead of Azure's default SNAT,
   and Key Vault data-plane access uses a private endpoint with public access disabled.
-- **Planned name resolution across the boundary.** Phase 5 will use Azure DNS Private Resolver
-  so private names resolve in both directions across the hybrid boundary.
+- **Bidirectional hybrid name resolution.** Azure DNS Private Resolver lets the simulated
+  datacenter resolve Azure private endpoints and lets Azure workloads resolve the
+  `corp.internal` namespace across the tunnel.
 - **Keyless delivery.** OIDC federation into Entra ID eliminates static credentials in the repository.
   Infrastructure changes use remote state and execute only when manually triggered in GitHub Actions.
 
-Built incrementally in phases, with each layer validated before moving to the next. Phases 0 through 4 are complete: core networking, VPN connectivity, Bastion access, Azure Firewall, and private Key Vault access are deployed. Azure DNS Private Resolver is next.
+Built incrementally in phases, with each layer validated before moving to the next. Phases 0 through
+5 are complete: core networking, VPN connectivity, Bastion access, Azure Firewall, private Key
+Vault access, and bidirectional hybrid DNS are deployed and validated.
 
 ---
 
@@ -41,7 +44,7 @@ flowchart TB
         direction TB
         HGW["GatewaySubnet<br/>vgw-hub"]
         HFW["AzureFirewallSubnet<br/>Azure Firewall"]
-        HDN["snet-dns-inbound /28<br/>snet-dns-outbound /28<br/>DNS Private Resolver<br/>phase 5"]
+        HDN["snet-dns-inbound /28<br/>inbound 10.0.3.4<br/>snet-dns-outbound /28<br/>DNS Private Resolver"]
     end
 
     subgraph SP["vnet-spoke - 10.1.0.0/16 - workload (swedencentral)"]
@@ -54,12 +57,11 @@ flowchart TB
     HUB -->|"peering, gateway transit"| SP
     SP -->|"peering, remote gateways"| HUB
     SVM -.->|"UDR forces inspection<br/>phase 3"| HFW
-    OVM -.->|"resolves privatelink<br/>across the tunnel<br/>phase 5"| HDN
+    OVM -.->|"Azure private names<br/>inbound endpoint"| HDN
+    HDN -.->|"corp.internal<br/>outbound endpoint"| OVM
 
     classDef built stroke:#2da44e,stroke-width:2px,color:#e6edf3
-    classDef planned stroke:#8b949e,stroke-width:1px,stroke-dasharray:4 4,color:#8b949e
-    class OGW,OVM,HGW,HBA,SVM,HFW,SPL built
-    class HDN planned
+    class OGW,OVM,HGW,HBA,SVM,HFW,SPL,HDN built
     linkStyle 0 stroke-width:3px,stroke:#2da44e
 ```
 
@@ -71,13 +73,13 @@ Three non-overlapping ranges, chosen so the simulated on-prem datacenter looks n
 
 | Document | What is in it |
 |---|---|
-| [plan.md](plan.md) | The five phases, what is done, and what is deliberately not being built |
+| [plan.md](plan.md) | The completed phases, current operating constraints, and next improvements |
 | [docs/worklog.md](docs/worklog.md) | What was built and in what order, with the evidence |
-| [docs/decisions.md](docs/decisions.md) | Fifteen decisions as questions, each with what it was chosen over and what it gives up |
-| [docs/troubleshooting.md](docs/troubleshooting.md) | Seventeen failures and diagnostic traps grouped by phase, with the real error, root cause, and fix |
+| [docs/decisions.md](docs/decisions.md) | Architecture decisions as questions, each with alternatives and trade-offs |
+| [docs/troubleshooting.md](docs/troubleshooting.md) | Real failures and diagnostic traps grouped by phase, with the error, root cause, and fix |
 | [docs/terraform/README.md](docs/terraform/README.md) | Where Terraform configuration belongs, module boundaries, typed contracts, and the safe change workflow |
 | [docs/terraform/patterns.md](docs/terraform/patterns.md) | Loops, collections, `flatten()`, `for_each`, dynamic blocks, and a concrete subnet walkthrough |
-| [docs/validation/README.md](docs/validation/README.md) | Phase-by-phase control-plane and data-plane evidence through Phase 4 Private Link |
+| [docs/validation/README.md](docs/validation/README.md) | Phase-by-phase control-plane and data-plane evidence through Phase 5 hybrid DNS |
 
 ---
 

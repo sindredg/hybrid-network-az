@@ -154,6 +154,28 @@ The modules are private implementation modules for this repository. Provider con
 selection therefore remain in the root. If a module is later published or consumed independently, add
 its own `terraform.required_providers`, supported Terraform version, README, examples, and tests.
 
+## Phase 5 DNS configuration path
+
+The hybrid DNS values are environment data in `terraform/locals.tf`:
+
+```hcl
+dns_config = {
+  resolver_inbound_ip = "10.0.3.4"
+  onprem_zone         = "corp.internal."
+  onprem_dns_server   = local.onprem_workload_ip
+  test_record_name    = "app.corp.internal"
+}
+```
+
+The root module passes those values into the DNS module, which implements the resolver endpoints,
+ruleset, forwarding rule, and links. The same local values generate the on-premises VM's cloud-init
+configuration. That generated `dnsmasq` file binds only to `192.168.1.4`, marks `corp.internal` as
+local, and creates the test host record.
+
+Change the address, zone, or record in the root local rather than editing the child module or the
+live VM. A manual repair on a VM disappears when the VM is replaced. Also review the plan carefully:
+changing VM `custom_data` can require VM replacement because cloud-init is a first-boot mechanism.
+
 ## Safe change workflow
 
 Run the static checks from `terraform/` before opening a pull request:

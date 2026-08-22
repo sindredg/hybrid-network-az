@@ -681,17 +681,143 @@ is authorization.
 
 ---
 
+## Phase 5: Azure DNS Private Resolver
+
+### 18. Cloud-init cannot install `dnsmasq` during resolver deployment
+
+**Symptom**
+
+The spoke's `app.corp.internal` lookup timed out. On `vm-onprem`, the service did not exist, and the
+cloud-init log contained:
+
+```text
+Temporary failure resolving 'archive.ubuntu.com'
+Failure when attempting to install packages: ['dnsmasq']
+Failed to restart dnsmasq.service: Unit dnsmasq.service not found.
+```
+
+![Cloud-init could not resolve the Ubuntu repositories](images/phase5-troubleshooting-cloud-init-dns-failure.png)
+
+**Root cause**
+
+The on-premises VNet DNS setting and the resolver were changing in the same deployment. The VM's
+first boot tried to install its DNS package while its configured upstream `10.0.3.4` was not yet
+ready to answer. Cloud-init's package module failed once and did not retry after resolution became
+healthy.
+
+**Fix**
+
+After `nslookup archive.ubuntu.com` succeeded, running `apt-get update` and installing `dnsmasq`
+recovered the live VM. The Terraform source now writes the configuration first and uses a bounded
+cloud-init retry loop: it waits for public resolution, then updates APT, installs the package, and
+enables the service. That hardening was added after the captured deployment and still needs its next
+plan and post-apply smoke test.
+
+**Lesson**
+
+A successful infrastructure apply does not prove that guest bootstrap completed. When a deployment
+changes the DNS server a VM needs in order to install packages, make the bootstrap tolerate the
+control-plane convergence window and inspect `/var/log/cloud-init-output.log`.
+
+---
+
+### 19. `dnsmasq` fails with `Address already in use`
+
+**Symptom**
+
+The package installed, but the service failed immediately:
+
+```text
+failed to create listening socket for 0.0.0.0: Address already in use
+dnsmasq.service: Failed with result 'exit-code'
+```
+
+![dnsmasq cannot bind every interface while systemd-resolved owns a local DNS socket](images/phase5-troubleshooting-dnsmasq-bind-conflict.png)
+
+The generated file confirmed `listen-address=0.0.0.0`.
+
+![Original dnsmasq configuration listening on all addresses](images/phase5-troubleshooting-dnsmasq-original-config.png)
+
+**Root cause**
+
+Ubuntu's `systemd-resolved` already listens on the loopback stub address `127.0.0.53:53`. Asking
+`dnsmasq` to bind `0.0.0.0:53` includes that address, so the two services contend for the same port.
+The stub is also why `nslookup` reports server `127.0.0.53` even when the actual VNet-provided
+upstream is `10.0.3.4`.
+
+**Fix**
+
+Bind `dnsmasq` only to the workload interface:
+
+```text
+listen-address=192.168.1.4
+bind-interfaces
+```
+
+After restart, `ss -luntp` showed `dnsmasq` on UDP and TCP `192.168.1.4:53`, while
+`systemd-resolved` retained its loopback sockets. Terraform now declares the scoped listener for the
+next VM build; the screenshot validates the equivalent live repair.
+
+**Lesson**
+
+Before adding a DNS daemon, inspect existing listeners with `ss -luntp | grep ':53'`. A service can
+fail locally even when the network path, NSG, resolver, and forwarding rule are all correct.
+
+---
+
+### 20. The DNS server returns an A record followed by `SERVFAIL` or `NXDOMAIN`
+
+**Symptom**
+
+After fixing the listener, `nslookup app.corp.internal 192.168.1.4` printed the correct A address
+and then reported `SERVFAIL`. Adding `local=/corp.internal/` changed the trailing error to
+`NXDOMAIN`, but did not make the response clean.
+
+**Root cause**
+
+`nslookup` asks for more than one record type. The original `address=/name/IP` rule supplied the A
+answer, while other queries were either forwarded into the VM's own resolver path or answered as
+nonexistent under the newly local zone. One command therefore showed a valid address and an error
+for a separate record query.
+
+**Fix**
+
+Make the namespace local and define the test name as a host record:
+
+```text
+local=/corp.internal/
+host-record=app.corp.internal,192.168.1.4
+```
+
+The local query then returned one clean answer, and the same record resolved from `vm-spoke` through
+the outbound resolver path.
+
+![The corrected local DNS record returns cleanly](images/phase5-troubleshooting-dnsmasq-final-resolution.png)
+
+**Lesson**
+
+Read the complete DNS response, not only the first A address. Test the target DNS server locally
+before debugging the outbound endpoint; otherwise an application-level DNS configuration problem
+looks like a tunnel, firewall, or resolver failure.
+
+---
+
 ## Patterns worth carrying forward
 
-Seventeen failures now fall into six recurring shapes.
+Twenty failures now fall into six recurring shapes.
 
 **Platform and provider deprecations surface at different stages.** Items 3, 5, 6 and 9 were rejected by Azure during apply, while item 11 was rejected locally by the AzureRM 5.x schema. Validation must cover both the locked provider and the live platform.
 
-**Silence is worse than errors.** Items 1 and 7 cost more time than any loud failure. A hang and a skipped step give nothing to search for.
+**Silence is worse than errors.** Items 1, 7 and 18 cost more time than loud failures. A hang, a
+skipped step, and a guest-bootstrap failure hidden behind a successful apply give little to search
+for at the layer first being observed.
 
 **Exact-string matching fails unhelpfully.** Item 2 reported a missing record when the record existed with a different value. Anything matching on an exact string will rarely say "close, but different".
 
-**Error messages often name only one layer.** Item 8 blamed Azure for a provider check; item 10 looked like an NSG problem but was a routing limitation; item 15 looked like a missing feature but was block nesting. Each was solved by isolating the layer that emitted the message.
+**Error messages often name only one layer.** Item 8 blamed Azure for a provider check; item 10
+looked like an NSG problem but was a routing limitation; item 15 looked like a missing feature but
+was block nesting; items 19 and 20 initially looked like resolver failures but were local DNS-server
+configuration. Each was solved by isolating the layer that emitted the message.
 
 **A successful handshake is not a successful application request.** Item 13 looked like an NSG or firewall bypass until an HTTP request and the firewall logs showed the real Layer 7 decision.
 
