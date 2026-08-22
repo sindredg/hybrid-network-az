@@ -81,14 +81,22 @@ locals {
       enable_identity = false
       custom_data     = <<-EOF
         #cloud-config
-        packages: [dnsmasq]
         write_files:
           - path: /etc/dnsmasq.d/lab.conf
             content: |
-              listen-address=0.0.0.0
+              listen-address=${local.onprem_workload_ip}
               bind-interfaces
               address=/${local.dns_config.test_record_name}/${local.onprem_workload_ip}
-        runcmd: [systemctl restart dnsmasq]
+        runcmd:
+          - |
+            # The VNet DNS server is the resolver inbound endpoint, reachable only
+            # once the tunnel is up. Retry instead of failing the one-shot package
+            # module, which does not re-attempt after resolution becomes healthy.
+            for _ in $(seq 1 30); do
+              apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y dnsmasq && break
+              sleep 20
+            done
+            systemctl enable --now dnsmasq
       EOF
     }
     spoke = {
