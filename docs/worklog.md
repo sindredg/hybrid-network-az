@@ -1,10 +1,7 @@
 # Work log
 
 What was built, in the order it was built.
-
-Reasoning lives in [decisions.md](decisions.md), errors in [troubleshooting.md](troubleshooting.md), and test evidence in [validation/](validation/). This file is the narrative that connects them.
-
-Phase numbering follows [plan.md](../plan.md). Entries are chronological, which is why Phase 0 appears after Phase 1: it was a list of fixes that only became visible once Phase 1 was built.
+Reasoning in [decisions.md](decisions.md), errors in [troubleshooting.md](troubleshooting.md), and test results in [validation/](validation/). This file is the narrative that connects them.
 
 ---
 
@@ -12,7 +9,7 @@ Phase numbering follows [plan.md](../plan.md). Entries are chronological, which 
 
 ### Stage 1: Define the network
 
-Address plan first, resources second. Three non-overlapping ranges, the on-premises one chosen to look nothing like the Azure side:
+Address plan first, resources second. Three non-overlapping ranges, the on-premises one chosen to look diffrent from the Azure ones:
 
 | Network | Range | Subnets |
 |---|---|---|

@@ -93,10 +93,6 @@ module "privatelink" {
   tenant_id = data.azurerm_client_config.current.tenant_id
 }
 
-# The workload identity is created by the compute module and the vault by the
-# Private Link module, so their role assignment belongs at the root where those
-# two modules are wired together. The map key is known during planning even
-# when a newly created VM principal ID is not known until apply.
 resource "azurerm_role_assignment" "spoke_key_vault_secrets_user" {
   for_each = var.deploy_privatelink && var.deploy_workloads ? {
     spoke = module.compute[0].vm_principal_ids["spoke"]
@@ -107,8 +103,6 @@ resource "azurerm_role_assignment" "spoke_key_vault_secrets_user" {
   principal_id       = each.value
   principal_type     = "ServicePrincipal"
 
-  # A system-assigned identity can take time to appear in Microsoft Entra ID
-  # during a fresh deployment; the object ID already comes directly from Azure.
   skip_service_principal_aad_check = true
 }
 

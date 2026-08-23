@@ -1,6 +1,6 @@
 # Phase 1 validation: the tunnel
 
-The topology deploys from the pipeline, the connections come up, and it all tears down again. What this phase does *not* establish is that any traffic crosses the tunnel: that is [Phase 2](phase-2-connectivity.md).
+The topology deploys from the pipeline, the connections come up, and it all tears down again.
 
 ---
 

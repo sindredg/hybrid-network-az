@@ -1,31 +1,31 @@
-# Azure Private Hybrid Network
+# Hybrid Azure Private Network Lab
 
-Three private Azure networks in separate address spaces, joined by an encrypted IPsec tunnel and VNet peering, with shared services centralized in a hub and zero public exposure on any workload. The hub and spoke are located in Sweden Central, with the simulated "on-prem" network in Denmark East.
+Three private Azure networks, joined by an encrypted IPsec tunnel and/or VNet peering, with shared services centralized in a hub, with no public exposure on any workload. The hub and spoke networks are located in Sweden Central, with the simulated "on-prem" network in Denmark East.
 
-This is the pattern for connecting two private networks that do not implicitly trust each other: an on-premises datacenter reaching into Azure, two separate cloud estates, or an acquired company's network. Here vnet-onprem plays the datacenter role, but the mechanics could be identical regardless of the scenario.
+This is the pattern for connecting two private networks that don't implicitly trust each other: could be an on-premises datacenter reaching into Azure, two separate cloud environments, or a newly aquired network. In this project "vnet-onprem" plays the role of a datacenter, but the mechanics could be identical regardless of the scenario.
 
-Built with Terraform and deployed from GitHub Actions.
+Built with Terraform, deployed with GitHub Actions.
 
 ## What it does
 
 - **Encrypted connectivity between separate address domains.** An IPsec tunnel between
   two VPN gateways connects on-premises workloads in Denmark East with the cloud environment
   in Sweden Central. VNet peering with gateway transit allows the spoke to reach across the
-  tunnel through the hub's gateway rather than deploying its own.
+  tunnel through the hub's gateway.
 - **Centralised inspection.** A firewall in the hub uses user-defined routes (UDRs) to
-  force spoke-to-on-premises traffic and spoke egress through it.
+  force traffic through it.
 - **No public exposure.** Workloads have no public IPs. Administrative access goes through
   Azure Bastion, spoke egress leaves through the firewall instead of Azure's default SNAT,
-  and Key Vault data-plane access uses a private endpoint with public access disabled.
+  and Key Vault data-plane access uses a private endpoint.
 - **Bidirectional hybrid name resolution.** Azure DNS Private Resolver lets the simulated
   datacenter resolve Azure private endpoints and lets Azure workloads resolve the
   `corp.internal` namespace across the tunnel.
 - **Keyless delivery.** OIDC federation into Entra ID eliminates static credentials in the repository.
   Infrastructure changes use remote state and execute only when manually triggered in GitHub Actions.
 
-Built incrementally in phases, with each layer validated before moving to the next. Phases 0 through
-5 are complete: core networking, VPN connectivity, Bastion access, Azure Firewall, private Key
-Vault access, and bidirectional hybrid DNS are deployed and validated.
+Built incrementally in phases, with each layer validated before moving to the next. A
+Core networking, VPN connectivity, Bastion access, Azure Firewall, forced routing,
+private Key Vault access, and bidirectional hybrid DNS are deployed and validated.
 
 ---
 
@@ -68,10 +68,6 @@ flowchart TB
     linkStyle 0 stroke-width:3px,stroke:#2da44e
 ```
 
-Three non-overlapping ranges, chosen so the simulated on-prem datacenter looks nothing like the Azure side. Neither VM has a public IP; admin access is through Bastion to the "on-prem" vm. The spoke has no gateway on its own, which is the point of the network topology: one gateway in the hub that serves every spoke.
-
----
-
 ## Documentation
 
 | Document | What is in it |
@@ -85,8 +81,3 @@ Three non-overlapping ranges, chosen so the simulated on-prem datacenter looks n
 | [docs/terraform/patterns.md](docs/terraform/patterns.md) | Loops, collections, `flatten()`, `for_each`, dynamic blocks, and a concrete subnet walkthrough |
 | [docs/validation/README.md](docs/validation/README.md) | Phase-by-phase control-plane and data-plane evidence through Phase 5 hybrid DNS |
 
----
-
-## Stack
-
-Azure (Sweden Central, Denmark East), Terraform with the AzureRM provider, GitHub Actions, Entra ID workload identity federation, Azure RBAC custom roles.

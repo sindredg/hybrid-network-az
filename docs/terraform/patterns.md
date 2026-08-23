@@ -3,7 +3,7 @@
 [Terraform guide](README.md) > Loops and collection patterns
 
 This guide explains the main non-obvious pattern in the repository: turning one nested network map
-into three VNets and nine subnets. It uses one real subnet—`hub-snet-dns-inbound`—and follows it
+into three VNets and nine subnets. It uses one real subnet, `hub-snet-dns-inbound`, and follows it
 from the input map to its Terraform resource address.
 
 ## Terraform looping fundamentals
@@ -707,7 +707,7 @@ It makes the address plan the source of truth and removes repeated resource bloc
 
 **Why flatten the data?**
 
-The source data is hierarchical—networks contain subnets—but each Terraform resource instance needs
+The source data is hierarchical, since networks contain subnets, but each Terraform resource instance needs
 one subnet object. `flatten()` creates that list of objects; the following map expression reshapes it
 into a type resource `for_each` accepts.
 

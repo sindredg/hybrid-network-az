@@ -1,6 +1,6 @@
 # Phase 3 validation: forced routing and Azure Firewall
 
-Phase 3 inserts Azure Firewall into the path between the spoke and the simulated on-premises network. The evidence below shows that ICMP and SSH remain reachable after the UDRs are activated, while application-rule logs prove that HTTP traffic traverses the firewall and receives the configured allow or default-deny decision.
+Inserts Azure Firewall into the path between the spoke and the simulated on-premises network. The tests below shows that ICMP and SSH remain reachable after the UDRs are activated, while application-rule logs show that HTTP traffic traverses the firewall and receives the configured allow or default-deny decision.
 
 | Check | Result |
 |---|---|

@@ -3,7 +3,7 @@
 Phase 4 moves Key Vault access off the public data plane. The vault is reachable from the spoke VM
 through a private endpoint, and the VM authenticates with its system-assigned managed identity.
 
-**Result:** complete. The endpoint is approved at `10.1.1.4`, the public endpoint is disabled,
+**Result:** The endpoint is approved at `10.1.1.4`, the public endpoint is disabled,
 private DNS resolves correctly in the spoke, and an authenticated Key Vault request succeeds over
 Private Link.
 

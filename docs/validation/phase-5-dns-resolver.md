@@ -1,11 +1,11 @@
 # Phase 5 validation: Azure DNS Private Resolver
 
-Phase 5 replaces direct cross-boundary private-zone linking with an explicit hybrid DNS path. The
+Replaces direct cross-boundary private-zone linking with an explicit hybrid DNS path. The
 simulated datacenter sends Azure private-name queries to a resolver inbound endpoint, while Azure
 workloads send `corp.internal` queries through a forwarding ruleset and resolver outbound endpoint
 to the on-premises DNS server.
 
-**Result:** complete. Both resolution directions pass, and the negative baselines show that neither
+**Result:** Both resolution directions pass, and the negative baselines show that neither
 answer existed through the demonstrated path before the resolver was deployed. The target listens
 on both DNS transports; the captured TCP query proves the client-to-stub leg only, not that the
 resolver-to-target leg selected TCP.

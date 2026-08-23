@@ -1,12 +1,8 @@
 # Troubleshooting log
 
-Every error hit while building this lab, with the actual message, why it happened, and what fixed it.
+Errors hit while building this lab, with the error messages, why it happened, and what fixed it.
 
-Kept because most of these are not obvious from the Terraform documentation. Several are Azure platform changes that only surface as a failed apply.
-
-Grouped by the phase they were hit in. Phase numbering follows [plan.md](../plan.md).
-
-**Quick index**
+**Overview**
 
 | # | Phase | Symptom | Root cause | Status |
 |---|---|---|---|---|
@@ -676,7 +672,7 @@ The repeated request returned HTTP 200 and an empty secret list. The response he
 **Lesson**
 
 Test private PaaS access as four separate claims: DNS, route/endpoint, token issuance, and RBAC. A
-403 after private DNS and token acquisition is useful evidence—the network path works and the fault
+403 after private DNS and token acquisition is useful evidence. The network path works and the fault
 is authorization.
 
 ---
@@ -803,26 +799,3 @@ the outbound resolver path.
 Read the complete DNS response, not only the first A address. Test the target DNS server locally
 before debugging the outbound endpoint; otherwise an application-level DNS configuration problem
 looks like a tunnel, firewall, or resolver failure.
-
----
-
-## Patterns worth carrying forward
-
-Twenty failures now fall into six recurring shapes.
-
-**Platform and provider deprecations surface at different stages.** Items 3, 5, 6 and 9 were rejected by Azure during apply, while item 11 was rejected locally by the AzureRM 5.x schema. Validation must cover both the locked provider and the live platform.
-
-**Silence is worse than errors.** Items 1, 7 and 18 cost more time than loud failures. A hang, a
-skipped step, and a guest-bootstrap failure hidden behind a successful apply give little to search
-for at the layer first being observed.
-
-**Exact-string matching fails unhelpfully.** Item 2 reported a missing record when the record existed with a different value. Anything matching on an exact string will rarely say "close, but different".
-
-**Error messages often name only one layer.** Item 8 blamed Azure for a provider check; item 10
-looked like an NSG problem but was a routing limitation; item 15 looked like a missing feature but
-was block nesting; items 19 and 20 initially looked like resolver failures but were local DNS-server
-configuration. Each was solved by isolating the layer that emitted the message.
-
-**A successful handshake is not a successful application request.** Item 13 looked like an NSG or firewall bypass until an HTTP request and the firewall logs showed the real Layer 7 decision.
-
-**Identity, authorization, and network access are separate controls.** Items 16 and 17 both returned 403, but one involved the CI design and the other a missing workload role. DNS, endpoint reachability, token issuance, and RBAC need independent checks.

@@ -1,6 +1,6 @@
 # Phase 2 validation: connectivity and NSGs
 
-Two VMs, no public IPs. Everything below was run against the deployed lab.
+1 VM in the spoke vnet, 1 in the "on-prem" vnet.
 
 | Check | Result |
 |---|---|
