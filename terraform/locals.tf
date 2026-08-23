@@ -50,8 +50,6 @@ locals {
     }
   }
 
-  # Reserved: AzureFirewallManagementSubnet 10.0.4.0/26, only for the Basic firewall SKU.
-
   # Only networks that terminate a tunnel receive VPN resources.
   gateway_networks = {
     for network_key, network_config in local.networks :
@@ -109,9 +107,6 @@ locals {
     }
   } : {}
 
-  # NSGs are free, so they exist whether or not the VMs do.
-  # The deny-all rule overrides the default AllowVnetInBound, which otherwise
-  # permits everything from peered VNets and across the tunnel.
   network_security_groups = {
     onprem-workloads = {
       vnet_key   = "onprem"

@@ -20,7 +20,6 @@ module "connectivity" {
   vpn_shared_key      = var.vpn_shared_key
 }
 
-# Gated on the module block rather than on every resource inside it.
 module "compute" {
   count               = var.deploy_workloads ? 1 : 0
   source              = "./modules/compute"
@@ -32,9 +31,7 @@ module "compute" {
   admin_username      = var.admin_username
   admin_ssh_key       = var.admin_ssh_public_key
 
-  # vnet-onprem uses the resolver inbound endpoint as its DNS server, which is only
-  # reachable once the tunnel exists. Without this the VM boots roughly forty minutes
-  # before the gateways finish and cloud-init cannot resolve the package repositories.
+  # vnet-onprem resolves DNS through the tunnel, so the VM should not boot before the gateways finish.
   depends_on = [module.connectivity]
 }
 
@@ -48,7 +45,6 @@ module "firewall" {
   onprem_range        = local.networks.onprem.address_space[0]
 }
 
-# Separate from the firewall module so the dependency is explicit and acyclic.
 module "routing" {
   count                 = var.deploy_firewall ? 1 : 0
   source                = "./modules/routing"
@@ -61,8 +57,7 @@ module "routing" {
   onprem_range          = local.networks.onprem.address_space[0]
 }
 
-# Stays at root: it wires two modules together, and the spoke side must wait for
-# the hub gateway or Azure rejects use_remote_gateways.
+# Stays at root: it wires two modules together, and use_remote_gateways fails before the hub gateway exists.
 resource "azurerm_virtual_network_peering" "this" {
   for_each = { for peering in local.peerings : peering.name => peering }
 
@@ -93,10 +88,7 @@ module "privatelink" {
   tenant_id = data.azurerm_client_config.current.tenant_id
 }
 
-# The workload identity is created by the compute module and the vault by the
-# Private Link module, so their role assignment belongs at the root where those
-# two modules are wired together. The map key is known during planning even
-# when a newly created VM principal ID is not known until apply.
+# The identity comes from compute and the vault from privatelink, so the assignment lives at the root.
 resource "azurerm_role_assignment" "spoke_key_vault_secrets_user" {
   for_each = var.deploy_privatelink && var.deploy_workloads ? {
     spoke = module.compute[0].vm_principal_ids["spoke"]
@@ -107,8 +99,7 @@ resource "azurerm_role_assignment" "spoke_key_vault_secrets_user" {
   principal_id       = each.value
   principal_type     = "ServicePrincipal"
 
-  # A system-assigned identity can take time to appear in Microsoft Entra ID
-  # during a fresh deployment; the object ID already comes directly from Azure.
+  # A new system-assigned identity can lag in Entra ID; the object ID already comes from Azure.
   skip_service_principal_aad_check = true
 }
 
