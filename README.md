@@ -1,10 +1,10 @@
-# Azure Private Hybrid Network
+# Azure Hub-and-Spoke Network with "on-prem" integration
 
-Three private Azure networks in separate address spaces, joined by an encrypted IPsec tunnel and VNet peering, with shared services centralized in a hub and zero public exposure on any workload. The hub and spoke are located in Sweden Central, with the simulated "on-prem" network in Denmark East.
+Three private networks in separate address spaces, joined by an encrypted IPsec tunnel and VNet peering, with shared services centralized in a hub and zero public exposure on any workload. The hub and spoke are located in Sweden Central, with the simulated "on-prem" network in Denmark East.
 
-This is the pattern for connecting two private networks that do not implicitly trust each other: an on-premises datacenter reaching into Azure, two separate cloud estates, or an acquired company's network. Here vnet-onprem plays the datacenter role, but the mechanics could be identical regardless of the scenario.
+This is the pattern for connecting two private networks that do not implicitly trust each other: an on-premises datacenter reaching into Azure, two separate cloud estates, etc. Here "vnet-onprem" plays the on-premises datacenter role, but the mechanics could be identical regardless of the scenario.
 
-Built with Terraform and deployed from GitHub Actions.
+Built with Terraform and deployed with GitHub Actions.
 
 ## What it does
 
@@ -68,25 +68,14 @@ flowchart TB
     linkStyle 0 stroke-width:3px,stroke:#2da44e
 ```
 
-Three non-overlapping ranges, chosen so the simulated on-prem datacenter looks nothing like the Azure side. Neither VM has a public IP; admin access is through Bastion to the "on-prem" vm. The spoke has no gateway on its own, which is the point of the network topology: one gateway in the hub that serves every spoke.
-
 ---
 
 ## Documentation
 
-| Document | What is in it |
+| Document | What's in it |
 |---|---|
-| [plan.md](plan.md) | The completed phases, current operating constraints, and what was deferred |
 | [docs/architecture.md](docs/architecture.md) | How traffic moves end to end, and which control enforces each hop |
 | [docs/worklog.md](docs/worklog.md) | What was built and in what order, with the evidence |
 | [docs/decisions.md](docs/decisions.md) | Architecture decisions as questions, each with alternatives and trade-offs |
 | [docs/troubleshooting.md](docs/troubleshooting.md) | Real failures and diagnostic traps grouped by phase, with the error, root cause, and fix |
-| [docs/terraform/README.md](docs/terraform/README.md) | Where Terraform configuration belongs, module boundaries, typed contracts, and the safe change workflow |
-| [docs/terraform/patterns.md](docs/terraform/patterns.md) | Loops, collections, `flatten()`, `for_each`, dynamic blocks, and a concrete subnet walkthrough |
 | [docs/validation/README.md](docs/validation/README.md) | Phase-by-phase control-plane and data-plane evidence through Phase 5 hybrid DNS |
-
----
-
-## Stack
-
-Azure (Sweden Central, Denmark East), Terraform with the AzureRM provider, GitHub Actions, Entra ID workload identity federation, Azure RBAC custom roles.
