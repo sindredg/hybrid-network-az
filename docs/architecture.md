@@ -23,13 +23,13 @@ work" doesn't.
 | 6 | NSG inbound rules | Destination subnet | [`locals.tf`](../terraform/locals.tf) `network_security_groups` |
 | 7 | Azure RBAC | Data plane, PaaS only | [`main.tf`](../terraform/main.tf) `azurerm_role_assignment` |
 
-Name resolution runs on its own path and is evaluated before any of this — a flow that fails at
+Name resolution runs on its own path and is evaluated before any of this. A flow that fails at
 step 0 never reaches step 1. That is the most common false diagnosis in this lab, and why
 [troubleshooting.md](troubleshooting.md) has three separate DNS entries.
 
 ---
 
-## Flow 1 — on-premises to spoke workload
+## Flow 1: on-premises to spoke workload
 
 The core hybrid path. Proves the tunnel, gateway transit, and both NSGs.
 
@@ -44,7 +44,7 @@ flowchart LR
 ```
 
 The spoke has no gateway of its own. It reaches on-premises because the hub peering sets
-`allow_gateway_transit` and the spoke side sets `use_remote_gateways` — decision 2. Remove either
+`allow_gateway_transit` and the spoke side sets `use_remote_gateways`, which is decision 2. Remove either
 flag and this path dies with no error message on the data plane.
 
 The return path is **not** symmetric by default: spoke-to-on-premises egress is pulled into the
@@ -54,7 +54,7 @@ firewall by UDR (flow 2). That asymmetry was deliberate and is what Phase 3 vali
 
 ---
 
-## Flow 2 — spoke to on-premises, and spoke to internet
+## Flow 2: spoke to on-premises, and spoke to internet
 
 Both leave the spoke through the firewall. The UDR is what makes inspection unavoidable.
 
@@ -78,7 +78,7 @@ classic cause of a connection that opens and then hangs.
 
 ---
 
-## Flow 3 — spoke to Key Vault over Private Link
+## Flow 3: spoke to Key Vault over Private Link
 
 No public endpoint, no credentials, no traffic leaving the VNet.
 
@@ -96,7 +96,7 @@ Two independent gates, and both must pass: the **network** path exists only thro
 endpoint, and the **data plane** requires an RBAC role assignment. A VM that can resolve and reach
 the vault still gets `403` without the role.
 
-Terraform never reads from the vault — decision 14. The runner is a GitHub-hosted machine outside
+Terraform never reads from the vault, which is decision 14. The runner is a GitHub-hosted machine outside
 the VNet, so with public access disabled it has no path to the data plane at all. That constraint is
 load-bearing, not an oversight.
 
@@ -104,11 +104,11 @@ load-bearing, not an oversight.
 
 ---
 
-## Flow 4 — hybrid DNS, both directions
+## Flow 4: hybrid DNS, both directions
 
 The only flow where the two networks resolve each other's private namespaces. This is what
 DNS Private Resolver exists for; a direct private-zone link would not work against a real
-datacenter — decision 16.
+datacenter, which is decision 16.
 
 ```mermaid
 flowchart TB
@@ -132,7 +132,7 @@ Three things about this flow break easily, all of them recorded as real failures
 - Both resolver subnets are delegated `/28`s to `Microsoft.Network/dnsResolvers` and can host
   nothing else. That is a service requirement, not a design choice.
 - The on-premises NSG must allow **both UDP and TCP** port 53 from the outbound subnet
-  `10.0.3.16/28`. TCP is not optional — large answers and retries need it.
+  `10.0.3.16/28`. TCP is not optional, because large answers and retries need it.
 
 `nslookup` on Ubuntu reports server `127.0.0.53` regardless of any of this, because that is the
 `systemd-resolved` stub. It says nothing about which upstream actually answered.
@@ -141,7 +141,7 @@ Three things about this flow break easily, all of them recorded as real failures
 
 ---
 
-## Flow 5 — the delivery path
+## Flow 5: the delivery path
 
 How infrastructure changes reach Azure. No stored cloud credential exists anywhere in this flow.
 
@@ -155,8 +155,8 @@ flowchart LR
     B -.->|"no network path<br/>public access disabled"| G["Key Vault data plane"]
 ```
 
-The runner authenticates with a short-lived token proving *which repository and ref* is running —
-decision 3. The custom RBAC role limits what that token can do — decision 4. The dashed line is the
+The runner authenticates with a short-lived token proving *which repository and ref* is running,
+which is decision 3. The custom RBAC role limits what that token can do, which is decision 4. The dashed line is the
 deliberate gap: the pipeline can create the vault but cannot read from it.
 
 **Evidence:** [phase-0-pipeline.md](validation/phase-0-pipeline.md)
@@ -177,5 +177,5 @@ directly. When a flow fails, the useful question is which hop above stopped it:
 | Name does not resolve at all | Resolver ruleset link or rule (flow 4) | `dig @10.0.3.4` directly |
 | Reaches the service, gets 403 | RBAC (7), not networking | `az role assignment list --scope` |
 
-A check that passes on the control plane and fails on the data plane is the interesting case — that
+A check that passes on the control plane and fails on the data plane is the interesting case, because that
 gap is how the Phase 2 Bastion routing problem was found.

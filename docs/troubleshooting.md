@@ -4,7 +4,7 @@ Every error hit while building this lab, with the actual message, why it happene
 
 Kept because most of these are not obvious from the Terraform documentation. Several are Azure platform changes that only surface as a failed apply.
 
-Grouped by the phase they were hit in. Phase numbering follows [plan.md](../plan.md).
+Grouped by the phase they were hit in. Phase numbering follows the [validation index](validation/README.md).
 
 **Quick index**
 
@@ -94,7 +94,7 @@ record found for presented assertion subject
 
 ![Init step failing with AADSTS700213, showing the presented assertion subject](images/oidc-aadsts700213-error.png)
 
-Two things in the full log are worth noticing beyond the error code. The first line is `Failed to get existing workspaces: Error retrieving keys for Storage Account`, which is the backend trying to look up the storage account access key through the management plane, and failing at the authentication step before it gets there. That is the access-key lookup behaviour described in [decisions.md](decisions.md#5-why-is-the-backend-only-partially-configured). The second is that Azure prints the exact subject it was presented with, which turns out to be the fix.
+Two things in the full log are worth noticing beyond the error code. The first line is `Failed to get existing workspaces: Error retrieving keys for Storage Account`, which is the backend trying to look up the storage account access key through the management plane, and failing at the authentication step before it gets there. That is the access-key lookup behaviour described in [decisions.md](decisions.md#5-terraform-state-backend). The second is that Azure prints the exact subject it was presented with, which turns out to be the fix.
 
 **Root cause**
 
@@ -338,7 +338,7 @@ if: github.event_name == 'workflow_dispatch'
 
 Worth adding a GitHub Environment with a required reviewer at the same time, so the apply needs a deliberate approval. That restores the protection the old push-gate was only appearing to provide.
 
-The reasoning behind the trigger change is in [decisions.md](decisions.md#7-why-does-deployment-need-a-button-press).
+The reasoning behind the trigger change is in [decisions.md](decisions.md#7-deployment-trigger).
 
 **Verified fixed.** The next manual run reached the apply step and stayed there for 24 minutes, rather than skipping it and finishing in one.
 
@@ -676,7 +676,7 @@ The repeated request returned HTTP 200 and an empty secret list. The response he
 **Lesson**
 
 Test private PaaS access as four separate claims: DNS, route/endpoint, token issuance, and RBAC. A
-403 after private DNS and token acquisition is useful evidence—the network path works and the fault
+403 after private DNS and token acquisition is useful evidence. The network path works and the fault
 is authorization.
 
 ---
