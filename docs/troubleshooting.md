@@ -676,7 +676,7 @@ The repeated request returned HTTP 200 and an empty secret list. The response he
 **Lesson**
 
 Test private PaaS access as four separate claims: DNS, route/endpoint, token issuance, and RBAC. A
-403 after private DNS and token acquisition is useful evidence—the network path works and the fault
+403 after private DNS and token acquisition is useful evidence. The network path works and the fault
 is authorization.
 
 ---
