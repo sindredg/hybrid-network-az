@@ -4,7 +4,7 @@ What was built, in the order it was built.
 
 Reasoning lives in [decisions.md](decisions.md), errors in [troubleshooting.md](troubleshooting.md), and test evidence in [validation/](validation/). This file is the narrative that connects them.
 
-Phase numbering follows [plan.md](../plan.md). Entries are chronological, which is why Phase 0 appears after Phase 1: it was a list of fixes that only became visible once Phase 1 was built.
+Phase numbering follows the [validation index](validation/README.md). Entries are chronological, which is why Phase 0 appears after Phase 1: it was a list of fixes that only became visible once Phase 1 was built.
 
 ---
 
@@ -22,7 +22,7 @@ Address plan first, resources second. Three non-overlapping ranges, the on-premi
 
 Non-overlapping matters specifically here: a tunnel and a peering both push routes into the same tables, so overlap either fails to build or builds and routes traffic somewhere unexpected.
 
-That plan went into `locals.tf` as a map, not a comment. Two resource blocks produce all three VNets and all six subnets via `flatten()`, explained in [Terraform loops and collection patterns](terraform/patterns.md).
+That plan went into `locals.tf` as a map, not a comment. Two resource blocks produce all three VNets and all six subnets via `flatten()`, defined in [`locals.tf`](../terraform/locals.tf) and expanded in [`modules/network/main.tf`](../terraform/modules/network/main.tf).
 
 Then two gateways, two connections pointing at each other, and hub-to-spoke peering with `allow_gateway_transit` on one side and `use_remote_gateways` on the other. Those two flags are the whole point: the spoke reaches on-prem through the hub's gateway rather than paying for its own.
 

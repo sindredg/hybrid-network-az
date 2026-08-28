@@ -4,7 +4,7 @@ Every error hit while building this lab, with the actual message, why it happene
 
 Kept because most of these are not obvious from the Terraform documentation. Several are Azure platform changes that only surface as a failed apply.
 
-Grouped by the phase they were hit in. Phase numbering follows [plan.md](../plan.md).
+Grouped by the phase they were hit in. Phase numbering follows the [validation index](validation/README.md).
 
 **Quick index**
 

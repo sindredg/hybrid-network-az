@@ -86,7 +86,7 @@ Kept short on purpose. The value is in the reasoning, not the ceremony.
 
 **Why:** the map reads as an address plan on its own. Adding a network becomes a data change rather than a code change.
 
-**Trade-off:** plan output is noisier, errors point at the loop rather than the offending entry, and map keys are part of the state address, so renaming a key destroys and recreates the resource. On a gateway that means 40 minutes. Written up in full in [Terraform loops and collection patterns](terraform/patterns.md).
+**Trade-off:** plan output is noisier, errors point at the loop rather than the offending entry, and map keys are part of the state address, so renaming a key destroys and recreates the resource. On a gateway that means 40 minutes. The map is in [`locals.tf`](../terraform/locals.tf); the expansion is in [`modules/network/main.tf`](../terraform/modules/network/main.tf).
 
 **Status:** accepted. Worth re-evaluating if individual networks start needing genuinely different treatment.
 
@@ -164,7 +164,7 @@ Kept short on purpose. The value is in the reasoning, not the ceremony.
 
 **Trade-off:** the base network initially contained empty service subnets, which could make the topology look more complete than it was.
 
-**Status:** implemented. `AzureFirewallSubnet` is now occupied in the Sweden Central hub. During Phase 3, Bastion moved with the simulated on-premises environment to `AzureBastionSubnet` (`192.168.2.0/26`) in Denmark East. The same reservation pattern extends to the DNS resolver and private endpoint subnets in [plan.md](../plan.md) item 0.4.
+**Status:** implemented. `AzureFirewallSubnet` is now occupied in the Sweden Central hub. During Phase 3, Bastion moved with the simulated on-premises environment to `AzureBastionSubnet` (`192.168.2.0/26`) in Denmark East. The same reservation pattern extends to the DNS resolver and private endpoint subnets.
 
 ---
 
