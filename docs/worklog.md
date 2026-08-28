@@ -40,7 +40,7 @@ Custom role rather than Contributor. It grants provider wildcards but not unrest
 `roleAssignments/write`, so the pipeline cannot grant itself Owner or arbitrary roles. Phase 4 later
 added the separate, condition-limited `Key Vault Data Access Administrator` role, which permits only
 supported Key Vault data-plane role delegation. See
-[decisions.md](decisions.md#4-why-a-custom-rbac-role-instead-of-contributor).
+[decisions.md](decisions.md#4-pipeline-permissions).
 
 ![Federated credentials: gh-actions-main and gh-actions-pr](images/azure-federated-credentials.png)
 
