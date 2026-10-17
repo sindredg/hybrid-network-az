@@ -1,81 +1,73 @@
-# Azure Hub-and-Spoke Network with "on-prem" integration
+# Azure hub and spoke with an external network
 
-Three private networks in separate address spaces, joined by an encrypted IPsec tunnel and VNet peering, with shared services centralized in a hub and zero public exposure on any workload. The hub and spoke are located in Sweden Central, with the simulated "on-prem" network in Denmark East.
+An external network connected to private Azure workloads over IPsec, with firewall inspection
+and hybrid DNS.
+Terraform and GitHub Actions deployed the VPN gateways, Azure Firewall, Private Link, and DNS
+Private Resolver.
 
-This is the pattern for connecting two private networks that do not implicitly trust each other: an on-premises datacenter reaching into Azure, two separate cloud estates, etc. Here "vnet-onprem" plays the on-premises datacenter role, but the mechanics could be identical regardless of the scenario.
+> **Completed lab; environment torn down.** Results are historical. Later source changes have
+> not all been validated by redeployment; see [limits](#limits-that-matter).
 
-Built with Terraform and deployed with GitHub Actions.
+## How it fits together
 
-## What it does
+![Hybrid network overview: an external network reaches an Azure spoke through two VPN gateways, an IPsec tunnel, the hub firewall, and VNet peering. Cross-site DNS uses the same gateways and IPsec tunnel, branching to the hub resolver. The spoke queries Azure-provided DNS and its forwarding ruleset. The spoke reaches Key Vault through a private endpoint.](docs/diagrams/network-overview.svg)
 
-- **Encrypted connectivity between separate address domains.** An IPsec tunnel between
-  two VPN gateways connects on-premises workloads in Denmark East with the cloud environment
-  in Sweden Central. VNet peering with gateway transit allows the spoke to reach across the
-  tunnel through the hub's gateway rather than deploying its own.
-- **Centralised inspection.** A firewall in the hub uses user-defined routes (UDRs) to
-  force spoke-to-on-premises traffic and spoke egress through it.
-- **No public exposure.** Workloads have no public IPs. Administrative access goes through
-  Azure Bastion, spoke egress leaves through the firewall instead of Azure's default SNAT,
-  and Key Vault data-plane access uses a private endpoint with public access disabled.
-- **Bidirectional hybrid name resolution.** Azure DNS Private Resolver lets the simulated
-  datacenter resolve Azure private endpoints and lets Azure workloads resolve the
-  `corp.internal` namespace across the tunnel.
-- **Keyless delivery.** OIDC federation into Entra ID eliminates static credentials in the repository.
-  Infrastructure changes use remote state and execute only when manually triggered in GitHub Actions.
+The pattern connects a datacenter, another cloud, or another private network to an Azure hub and
+spoke. The VPN peer and address plan depend on the network being connected.
 
-Built incrementally in phases, with each layer validated before moving to the next. Phases 0 through
-5 are complete: core networking, VPN connectivity, Bastion access, Azure Firewall, private Key
-Vault access, and bidirectional hybrid DNS are deployed and validated.
+- **Connectivity and inspection:** the spoke borrows the hub's VPN gateway through peering.
+  User-defined routes on the spoke workload subnet and hub gateway subnet send traffic between
+  spoke workloads and the external network through Azure Firewall in both directions. The spoke's
+  default route also uses the firewall. Workload NSGs apply independently.
+- **Private service access:** a private endpoint in the spoke connects to Key Vault with public
+  network access disabled. Managed identity and vault-scoped RBAC authorize the spoke VM.
+- **Hybrid DNS:** the external network sends Azure private-name queries to the resolver's inbound
+  endpoint. Azure forwards `corp.internal` queries through a ruleset and outbound endpoint to
+  `dnsmasq` on the external network. Both cross-site DNS legs use the VPN gateways and IPsec tunnel.
+  The hub resolver uses the gateway route; the firewall UDRs target the spoke workloads.
+- **Administration and delivery:** workload VMs had no public IPs; lab administration used
+  Azure Bastion. GitHub Actions authenticated to Azure through OIDC. Terraform applies and
+  destroys required manual workflow dispatch.
 
----
+The [architecture notes](docs/architecture.md) trace individual flows. The
+[topology definition](terraform/locals.tf) holds the address plan and subnet rules.
 
-## Architecture
+## What was verified
 
-```mermaid
-flowchart TB
-    subgraph OP["vnet-onprem - 192.168.0.0/16 - simulated datacenter (denmarkeast)"]
-        direction TB
-        OGW["GatewaySubnet<br/>vgw-onprem"]
-        HBA["AzureBastionSubnet<br/>bastion-onprem"]
-        OVM["snet-onprem-workloads<br/>vm-onprem"]
-    end
+Each evidence record contains the checks, screenshots, and qualifications behind these results.
 
-    subgraph HUB["vnet-hub - 10.0.0.0/16 - shared services (swedencentral)"]
-        direction TB
-        HGW["GatewaySubnet<br/>vgw-hub"]
-        HFW["AzureFirewallSubnet<br/>Azure Firewall"]
-        HDN["snet-dns-inbound /28<br/>inbound 10.0.3.4<br/>snet-dns-outbound /28<br/>DNS Private Resolver"]
-    end
+| Behavior checked | Observed result | Evidence |
+| --- | --- | --- |
+| Connectivity across the tunnel | Traffic crossed the tunnel in both directions; 11 NSG assertions passed, with allowed and blocked ports also checked from a VM | [Tunnel traffic](docs/validation/phase-2-connectivity.md#a-packet-crosses-the-tunnel), [NSG matrix](docs/validation/phase-2-connectivity.md#nsg-matrix) |
+| Firewall enforcement after forced routing | ICMP and SSH remained reachable; unmatched HTTP received a default deny, confirmed in application-rule logs | [HTTP denial](docs/validation/phase-3-route+firewall.md#why-ports-80-and-443-appeared-open), [rule logs](docs/validation/phase-3-route+firewall.md#log-analytics-evidence) |
+| Private Key Vault access and authorization | A request failed without RBAC, then returned HTTP 200 after assignment; the response identified `conn_type=PrivateLink` | [Data-plane checks](docs/validation/phase-4-private-link.md#data-plane-validation-from-vm-spoke) |
+| Hybrid DNS in both directions | An external client resolved the vault to its private endpoint; the spoke resolved `app.corp.internal` after its earlier `NXDOMAIN` baseline | [Inbound lookup](docs/validation/phase-5-dns-resolver.md#inbound-validation-on-premises-to-azure-private-dns), [outbound lookup](docs/validation/phase-5-dns-resolver.md#outbound-validation-azure-to-the-on-premises-namespace) |
 
-    subgraph SP["vnet-spoke - 10.1.0.0/16 - workload (swedencentral)"]
-        direction TB
-        SVM["snet-spoke-workloads<br/>vm-spoke"]
-        SPL["snet-privatelink<br/>private endpoint<br/>10.1.1.4"]
-    end
+The evidence distinguishes configured controls from observed traffic. A tunnel reporting
+`Connected` was insufficient; so was a successful TCP handshake when the firewall later denied HTTP.
 
-    KV["Azure Key Vault<br/>public network access disabled"]
+## Limits that matter
 
-    OGW <-->|"IPsec tunnel"| HGW
-    HUB -->|"peering, gateway transit"| SP
-    SP -->|"peering, remote gateways"| HUB
-    SVM -.->|"UDR forces inspection<br/>phase 3"| HFW
-    OVM -.->|"Azure private names<br/>inbound endpoint"| HDN
-    HDN -.->|"corp.internal<br/>outbound endpoint"| OVM
-    SPL --->|"Private Link"| KV
+- **Implementation scope:** the external network was an Azure VNet in Denmark East, connected
+  with VNet-to-VNet gateways. Third-party VPN devices and BGP interoperability were outside the tests.
+- **Permissive lab policy:** spoke HTTP/HTTPS egress permits wildcard FQDNs.
+  The deployment identity has broad provider permissions. See the
+  [firewall limitation](docs/validation/phase-3-route+firewall.md#result-and-remaining-limitation)
+  and [permission trade-offs](docs/decisions.md#4-pipeline-permissions).
+- **Rebuild not fully validated:** DNS evidence follows a manual repair. Later Terraform bootstrap
+  changes still need a new plan and smoke tests. See the
+  [source/evidence boundary](docs/validation/phase-5-dns-resolver.md#evidence-boundary-for-the-terraform-hardening).
+- **Partial TCP evidence:** the DNS test proved the client-to-local-stub leg, not TCP between
+  the resolver and `dnsmasq`. See the
+  [acceptance matrix](docs/validation/phase-5-dns-resolver.md#acceptance-matrix).
 
-    classDef built stroke:#2da44e,stroke-width:2px
-    class OGW,OVM,HGW,HBA,SVM,HFW,SPL,HDN built
-    linkStyle 0 stroke-width:3px,stroke:#2da44e
-```
+## Find your way around
 
----
-
-## Documentation
-
-| Document | What's in it |
-|---|---|
-| [docs/architecture.md](docs/architecture.md) | How traffic moves end to end, and which control enforces each hop |
-| [docs/worklog.md](docs/worklog.md) | What was built and in what order, with the evidence |
-| [docs/decisions.md](docs/decisions.md) | Architecture decisions as questions, each with alternatives and trade-offs |
-| [docs/troubleshooting.md](docs/troubleshooting.md) | Real failures and diagnostic traps grouped by phase, with the error, root cause, and fix |
-| [docs/validation/README.md](docs/validation/README.md) | Phase-by-phase control-plane and data-plane evidence through Phase 5 hybrid DNS |
+| To understand | Start here |
+| --- | --- |
+| How traffic moves and which control applies | [Architecture](docs/architecture.md) |
+| The checks and evidence behind the results | [Validation index](docs/validation/README.md) |
+| Why these services and trade-offs were chosen | [Decisions](docs/decisions.md), with links to Microsoft and Terraform documentation |
+| What was built, in order | [Worklog](docs/worklog.md) |
+| Failures, diagnoses, and fixes | [Troubleshooting](docs/troubleshooting.md) |
+| How the infrastructure is declared and deployed | [Terraform root](terraform/main.tf), [deployment workflow](.github/workflows/terraform-apply.yml) |
