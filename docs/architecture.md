@@ -31,7 +31,8 @@ step 0 never reaches step 1. That is the most common false diagnosis in this lab
 
 ## Flow 1: on-premises to spoke workload
 
-The core hybrid path. Proves the tunnel, gateway transit, and both NSGs.
+**Phase 2 baseline:** the path before Phase 3 added the firewall and forced routing. Phase 2 checked the tunnel,
+gateway transit, and both NSGs.
 
 ```mermaid
 flowchart LR
@@ -47,8 +48,9 @@ The spoke has no gateway of its own. It reaches on-premises because the hub peer
 `allow_gateway_transit` and the spoke side sets `use_remote_gateways`, which is decision 2. Remove either
 flag and this path dies with no error message on the data plane.
 
-The return path is **not** symmetric by default: spoke-to-on-premises egress is pulled into the
-firewall by UDR (flow 2). That asymmetry was deliberate and is what Phase 3 validated.
+Phase 3 added UDRs on both the spoke workload subnet and the hub gateway subnet, routing
+cross-premises traffic through the firewall in both directions (flow 2). The diagram above records
+the earlier baseline, not the final inspection path.
 
 **Evidence:** [phase-2-connectivity.md](validation/phase-2-connectivity.md)
 
