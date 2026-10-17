@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1120" height="650" viewBox="0 0 1120 650" role="img" aria-labelledby="title description">
   <title id="title">Azure hybrid networking: connectivity, private access, and DNS</title>
-  <desc id="description">Historical lab overview. A simulated datacenter VNet in Denmark East connects through its VPN gateway, an IPsec tunnel, the hub VPN gateway and firewall, and peering to a spoke in Sweden Central. Routes direct traffic between spoke workloads and the simulated site through the firewall in both directions. Both cross-site DNS legs traverse the VPN gateways and IPsec tunnel; the hub resolver uses the gateway route. The spoke uses Azure-provided DNS and a forwarding ruleset for corp.internal queries. The spoke VM accesses Azure Key Vault through a private endpoint, with managed identity and RBAC. Administration, delivery, and internet egress are omitted.</desc>
+  <desc id="description">Historical lab overview. An external network connects through its VPN gateway, an IPsec tunnel, the hub VPN gateway and firewall, and peering to a spoke in Sweden Central. Routes direct traffic between spoke workloads and the external network through the firewall in both directions. Both cross-site DNS legs traverse the VPN gateways and IPsec tunnel; the hub resolver uses the gateway route. The spoke uses Azure-provided DNS and a forwarding ruleset for corp.internal queries. The spoke VM accesses Azure Key Vault through a private endpoint, with managed identity and RBAC. Administration, delivery, and internet egress are omitted.</desc>
   <defs>
     <linearGradient id="background" x2="1" y2="1"><stop stop-color="#0b1426"/><stop offset="1" stop-color="#102338"/></linearGradient>
     <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#65dfbd"/></marker>
@@ -21,8 +21,8 @@
   <text x="32" y="47" class="heading" >Private networks, shared controls</text>
   <text x="32" y="76" class="detail" >VPN connectivity · firewall inspection · private service access · hybrid name resolution</text>
   <rect x="24" y="105" width="270" height="390" rx="12" class="panel" />
-  <text x="48" y="137" class="label" >Simulated datacenter</text>
-  <text x="48" y="160" class="small" >Denmark East · Azure VNet</text>
+  <text x="48" y="137" class="label" >External network</text>
+  <text x="48" y="160" class="small" >VPN-connected workloads + DNS</text>
   <rect x="318" y="105" width="416" height="390" rx="12" class="panel" />
   <text x="342" y="137" class="label" >Shared hub</text>
   <text x="342" y="160" class="small" >Sweden Central · Azure VNet</text>
@@ -42,11 +42,11 @@
   <path d="M 425 365 V 252" class="dns" marker-start="url(#dns-arrow)"/>
   <path d="M 806 365 V 295 H 530 V 252" class="dns"/>
   <rect x="48" y="180" width="222" height="72" rx="12" class="node" stroke="#466888"/>
-  <text x="64" y="209" class="label" >Test VM + DNS</text>
-  <text x="64" y="233" class="detail" >dnsmasq · corp.internal</text>
+  <text x="64" y="209" class="label" >Workload + DNS</text>
+  <text x="64" y="233" class="detail" >Serves corp.internal</text>
   <rect x="48" y="365" width="222" height="72" rx="12" class="node" stroke="#466888"/>
   <text x="64" y="394" class="label" >VPN gateway</text>
-  <text x="64" y="418" class="detail" >VNet-to-VNet connection</text>
+  <text x="64" y="418" class="detail" >IPsec peer</text>
   <rect x="350" y="365" width="150" height="72" rx="12" class="node" stroke="#466888"/>
   <text x="366" y="394" class="label" >VPN gateway</text>
   <text x="366" y="418" class="detail" >Gateway transit</text>
@@ -71,7 +71,7 @@
   <text x="746" y="386" class="small" text-anchor="middle">Peering</text>
   <text x="625" y="283" class="small" text-anchor="middle">via Azure DNS + ruleset</text>
   <text x="966" y="315" class="small" >HTTPS</text>
-  <text x="48" y="470" class="small" >Workload NSG</text>
+  <text x="48" y="470" class="small" >Workload access rules</text>
   <text x="350" y="470" class="small" >Spoke workload path inspected both ways</text>
   <text x="782" y="470" class="small" >Private endpoint path stays separate</text>
   <text x="782" y="518" class="small" >Private Link + vault-scoped RBAC</text>
