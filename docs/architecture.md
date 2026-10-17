@@ -1,6 +1,7 @@
 # Architecture
 
-How traffic actually moves through this lab, and which control decides each hop.
+How traffic moves through this lab, and which control decides each hop. The external network
+is named `vnet-onprem` in the source and historical evidence.
 
 The [README](../README.md) shows the topology. This document shows the paths. Every flow below
 has a matching evidence record in [docs/validation](validation/README.md); the reasoning behind each
@@ -31,7 +32,8 @@ step 0 never reaches step 1. That is the most common false diagnosis in this lab
 
 ## Flow 1: on-premises to spoke workload
 
-The core hybrid path. Proves the tunnel, gateway transit, and both NSGs.
+**Phase 2 baseline:** the path before Phase 3 added the firewall and forced routing. Phase 2 checked the tunnel,
+gateway transit, and both NSGs.
 
 ```mermaid
 flowchart LR
@@ -47,8 +49,9 @@ The spoke has no gateway of its own. It reaches on-premises because the hub peer
 `allow_gateway_transit` and the spoke side sets `use_remote_gateways`, which is decision 2. Remove either
 flag and this path dies with no error message on the data plane.
 
-The return path is **not** symmetric by default: spoke-to-on-premises egress is pulled into the
-firewall by UDR (flow 2). That asymmetry was deliberate and is what Phase 3 validated.
+Phase 3 added UDRs on both the spoke workload subnet and the hub gateway subnet, routing
+traffic between the spoke workloads and the external network through the firewall in both directions
+(flow 2). The diagram above records the earlier baseline, not the final inspection path.
 
 **Evidence:** [phase-2-connectivity.md](validation/phase-2-connectivity.md)
 
@@ -125,9 +128,20 @@ flowchart TB
     end
 ```
 
+Both cross-site DNS legs traverse the IPsec tunnel and its two VPN gateways: the site's query to
+hub inbound endpoint `10.0.3.4`, and the outbound endpoint's forwarded query to `dnsmasq` at
+`192.168.1.4`. Responses return over the tunnel too. The spoke first queries Azure-provided DNS;
+the linked ruleset selects the resolver's outbound endpoint for `corp.internal`.
+
+The hub DNS path differs from the spoke workload inspection path. The gateway-subnet UDR targets
+`10.1.0.0/16`, not the hub's DNS subnets; neither resolver subnet has the spoke workload route table.
+The resolver therefore uses the gateway route to the external network, while spoke workload traffic
+uses the firewall. See the [routing associations](../terraform/modules/routing/main.tf) and
+[resolver configuration](../terraform/modules/dns/main.tf).
+
 Three things about this flow break easily, all of them recorded as real failures:
 
-- The inbound endpoint IP is **pinned static** at `10.0.3.4` because the simulated site's DNS config
+- The inbound endpoint IP is **pinned static** at `10.0.3.4` because the external network's DNS config
   hard-codes it. A dynamic address would silently break the site on every rebuild.
 - Both resolver subnets are delegated `/28`s to `Microsoft.Network/dnsResolvers` and can host
   nothing else. That is a service requirement, not a design choice.

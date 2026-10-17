@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="650" viewBox="0 0 1120 650" role="img" aria-labelledby="title description">
+  <title id="title">Azure hybrid networking: connectivity, private access, and DNS</title>
+  <desc id="description">Historical lab overview. An external network connects through its VPN gateway, an IPsec tunnel, the hub VPN gateway and firewall, and peering to a spoke in Sweden Central. Routes direct traffic between spoke workloads and the external network through the firewall in both directions. Both cross-site DNS legs traverse the VPN gateways and IPsec tunnel; the hub resolver uses the gateway route. The spoke uses Azure-provided DNS and a forwarding ruleset for corp.internal queries. The spoke VM accesses Azure Key Vault through a private endpoint, with managed identity and RBAC. Administration, delivery, and internet egress are omitted.</desc>
+  <defs>
+    <linearGradient id="background" x2="1" y2="1"><stop stop-color="#0b1426"/><stop offset="1" stop-color="#102338"/></linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#65dfbd"/></marker>
+    <marker id="dns-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#8fbfff"/></marker>
+    <style>
+      text { font-family: Arial, Helvetica, sans-serif; fill: #eaf2ff; }
+      .heading { font-size: 25px; font-weight: 700; }
+      .label { font-size: 18px; font-weight: 700; }
+      .detail { font-size: 15px; fill: #b5c8df; }
+      .small { font-size: 14px; fill: #b5c8df; }
+      .panel { fill: #101e32; stroke: #30445f; stroke-width: 1.5; }
+      .node { fill: #193149; stroke: #466888; stroke-width: 1.5; }
+      .traffic { fill: none; stroke: #65dfbd; stroke-width: 2.5; marker-end: url(#arrow); }
+      .dns { fill: none; stroke: #8fbfff; stroke-width: 2; stroke-dasharray: 6 5; marker-end: url(#dns-arrow); }
+    </style>
+  </defs>
+  <rect width="1120" height="650" rx="18" fill="url(#background)"/>
+  <text x="32" y="47" class="heading" >Private networks, shared controls</text>
+  <text x="32" y="76" class="detail" >VPN connectivity · firewall inspection · private service access · hybrid name resolution</text>
+  <rect x="24" y="105" width="270" height="390" rx="12" class="panel" />
+  <text x="48" y="137" class="label" >External network</text>
+  <text x="48" y="160" class="small" >VPN-connected workloads + DNS</text>
+  <rect x="318" y="105" width="416" height="390" rx="12" class="panel" />
+  <text x="342" y="137" class="label" >Shared hub</text>
+  <text x="342" y="160" class="small" >Sweden Central · Azure VNet</text>
+  <rect x="758" y="105" width="338" height="390" rx="12" class="panel" />
+  <text x="782" y="137" class="label" >Workload spoke</text>
+  <text x="782" y="160" class="small" >Sweden Central · Azure VNet</text>
+  <path d="M 159 252 V 365" class="traffic" marker-start="url(#arrow)"/>
+  <path d="M 270 401 H 350" class="traffic" marker-start="url(#arrow)"/>
+  <path d="M 500 401 H 550" class="traffic" marker-start="url(#arrow)"/>
+  <path d="M 710 401 H 782" class="traffic" marker-start="url(#arrow)"/>
+  <path d="M 950 365 V 252" class="traffic"/>
+  <path d="M 1070 216 H 1104 V 564 H 1070" class="traffic"/>
+  <!-- DNS follows the same VPN gateways and tunnel, then branches to the hub resolver.
+       The gateway UDR targets the spoke prefix, not the hub DNS endpoint subnets. -->
+  <path d="M 105 252 V 365" class="dns" marker-start="url(#dns-arrow)"/>
+  <path d="M 270 385 H 350" class="dns" marker-start="url(#dns-arrow)"/>
+  <path d="M 425 365 V 252" class="dns" marker-start="url(#dns-arrow)"/>
+  <path d="M 806 365 V 295 H 530 V 252" class="dns"/>
+  <rect x="48" y="180" width="222" height="72" rx="12" class="node" stroke="#466888"/>
+  <text x="64" y="209" class="label" >Workload + DNS</text>
+  <text x="64" y="233" class="detail" >Serves corp.internal</text>
+  <rect x="48" y="365" width="222" height="72" rx="12" class="node" stroke="#466888"/>
+  <text x="64" y="394" class="label" >VPN gateway</text>
+  <text x="64" y="418" class="detail" >IPsec peer</text>
+  <rect x="350" y="365" width="150" height="72" rx="12" class="node" stroke="#466888"/>
+  <text x="366" y="394" class="label" >VPN gateway</text>
+  <text x="366" y="418" class="detail" >Gateway transit</text>
+  <rect x="550" y="365" width="160" height="72" rx="12" class="node" stroke="#65dfbd"/>
+  <text x="566" y="394" class="label" >Azure Firewall</text>
+  <text x="566" y="418" class="detail" >UDRs on both sides</text>
+  <rect x="782" y="365" width="288" height="72" rx="12" class="node" stroke="#466888"/>
+  <text x="798" y="394" class="label" >Workload VM</text>
+  <text x="798" y="418" class="detail" >Private IP · NSG · managed identity</text>
+  <rect x="350" y="180" width="360" height="72" rx="12" class="node" stroke="#466888"/>
+  <text x="366" y="209" class="label" >DNS Private Resolver</text>
+  <text x="366" y="233" class="detail" >Inbound + outbound endpoints and ruleset</text>
+  <rect x="782" y="180" width="288" height="72" rx="12" class="node" stroke="#466888"/>
+  <text x="798" y="209" class="label" >Private endpoint</text>
+  <text x="798" y="233" class="detail" >Key Vault private address</text>
+  <rect x="782" y="528" width="288" height="72" rx="12" class="node" stroke="#65dfbd"/>
+  <text x="798" y="557" class="label" >Azure Key Vault</text>
+  <text x="798" y="581" class="detail" >Public network access disabled</text>
+  <text x="440" y="334" class="small" >Hub DNS via gateway</text>
+  <text x="176" y="305" class="small" >Private traffic</text>
+  <text x="310" y="354" class="small" text-anchor="middle">IPsec</text>
+  <text x="746" y="386" class="small" text-anchor="middle">Peering</text>
+  <text x="625" y="283" class="small" text-anchor="middle">via Azure DNS + ruleset</text>
+  <text x="966" y="315" class="small" >HTTPS</text>
+  <text x="48" y="470" class="small" >Workload access rules</text>
+  <text x="350" y="470" class="small" >Spoke workload path inspected both ways</text>
+  <text x="782" y="470" class="small" >Private endpoint path stays separate</text>
+  <text x="782" y="518" class="small" >Private Link + vault-scoped RBAC</text>
+  <path d="M 32 533 H 76" class="traffic"/>
+  <text x="90" y="538" class="small" >Selected application paths</text>
+  <path d="M 32 567 H 76" class="dns"/>
+  <text x="90" y="572" class="small" >DNS: both cross-site legs use the VPN gateways and IPsec</text>
+  <text x="32" y="615" class="small" >Overview of the completed lab. Administration, delivery, and internet egress are omitted.</text>
+</svg>
