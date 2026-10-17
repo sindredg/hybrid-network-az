@@ -49,8 +49,8 @@ The spoke has no gateway of its own. It reaches on-premises because the hub peer
 flag and this path dies with no error message on the data plane.
 
 Phase 3 added UDRs on both the spoke workload subnet and the hub gateway subnet, routing
-cross-premises traffic through the firewall in both directions (flow 2). The diagram above records
-the earlier baseline, not the final inspection path.
+traffic between the spoke workloads and the simulated site through the firewall in both directions
+(flow 2). The diagram above records the earlier baseline, not the final inspection path.
 
 **Evidence:** [phase-2-connectivity.md](validation/phase-2-connectivity.md)
 
@@ -126,6 +126,17 @@ flowchart TB
         C2 -->|"UDP and TCP 53<br/>across the tunnel"| D2["dnsmasq on vm-onprem<br/>192.168.1.4"]
     end
 ```
+
+Both cross-site DNS legs traverse the IPsec tunnel and its two VPN gateways: the site's query to
+hub inbound endpoint `10.0.3.4`, and the outbound endpoint's forwarded query to `dnsmasq` at
+`192.168.1.4`. Responses return over the tunnel too. The spoke first queries Azure-provided DNS;
+the linked ruleset selects the resolver's outbound endpoint for `corp.internal`.
+
+The hub DNS path differs from the spoke workload inspection path. The gateway-subnet UDR targets
+`10.1.0.0/16`, not the hub's DNS subnets; neither resolver subnet has the spoke workload route table.
+The resolver therefore uses the gateway route to the simulated site, while spoke workload traffic
+uses the firewall. See the [routing associations](../terraform/modules/routing/main.tf) and
+[resolver configuration](../terraform/modules/dns/main.tf).
 
 Three things about this flow break easily, all of them recorded as real failures:
 

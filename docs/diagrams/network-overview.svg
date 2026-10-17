@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1120" height="650" viewBox="0 0 1120 650" role="img" aria-labelledby="title description">
   <title id="title">Azure hybrid networking: connectivity, private access, and DNS</title>
-  <desc id="description">Historical lab overview. A simulated datacenter VNet in Denmark East connects through its VPN gateway, an IPsec tunnel, the hub VPN gateway and firewall, and peering to a spoke in Sweden Central. Routes direct cross-premises traffic through the firewall in both directions. Logical DNS queries use the hub resolver and the simulated site's DNS server. The spoke VM accesses Azure Key Vault through a private endpoint, with managed identity and RBAC. Administration, delivery, and internet egress are omitted.</desc>
+  <desc id="description">Historical lab overview. A simulated datacenter VNet in Denmark East connects through its VPN gateway, an IPsec tunnel, the hub VPN gateway and firewall, and peering to a spoke in Sweden Central. Routes direct traffic between spoke workloads and the simulated site through the firewall in both directions. Both cross-site DNS legs traverse the VPN gateways and IPsec tunnel; the hub resolver uses the gateway route. The spoke uses Azure-provided DNS and a forwarding ruleset for corp.internal queries. The spoke VM accesses Azure Key Vault through a private endpoint, with managed identity and RBAC. Administration, delivery, and internet egress are omitted.</desc>
   <defs>
     <linearGradient id="background" x2="1" y2="1"><stop stop-color="#0b1426"/><stop offset="1" stop-color="#102338"/></linearGradient>
     <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#65dfbd"/></marker>
@@ -35,7 +35,11 @@
   <path d="M 710 401 H 782" class="traffic" marker-start="url(#arrow)"/>
   <path d="M 950 365 V 252" class="traffic"/>
   <path d="M 1070 216 H 1104 V 564 H 1070" class="traffic"/>
-  <path d="M 270 216 H 350" class="dns" marker-start="url(#dns-arrow)"/>
+  <!-- DNS follows the same VPN gateways and tunnel, then branches to the hub resolver.
+       The gateway UDR targets the spoke prefix, not the hub DNS endpoint subnets. -->
+  <path d="M 105 252 V 365" class="dns" marker-start="url(#dns-arrow)"/>
+  <path d="M 270 385 H 350" class="dns" marker-start="url(#dns-arrow)"/>
+  <path d="M 425 365 V 252" class="dns" marker-start="url(#dns-arrow)"/>
   <path d="M 806 365 V 295 H 530 V 252" class="dns"/>
   <rect x="48" y="180" width="222" height="72" rx="12" class="node" stroke="#466888"/>
   <text x="64" y="209" class="label" >Test VM + DNS</text>
@@ -61,19 +65,19 @@
   <rect x="782" y="528" width="288" height="72" rx="12" class="node" stroke="#65dfbd"/>
   <text x="798" y="557" class="label" >Azure Key Vault</text>
   <text x="798" y="581" class="detail" >Public network access disabled</text>
-  <text x="310" y="204" class="small" text-anchor="middle">DNS</text>
+  <text x="440" y="334" class="small" >Hub DNS via gateway</text>
   <text x="176" y="305" class="small" >Private traffic</text>
-  <text x="310" y="386" class="small" text-anchor="middle">IPsec</text>
+  <text x="310" y="354" class="small" text-anchor="middle">IPsec</text>
   <text x="746" y="386" class="small" text-anchor="middle">Peering</text>
-  <text x="625" y="283" class="small" text-anchor="middle">DNS ruleset</text>
+  <text x="625" y="283" class="small" text-anchor="middle">via Azure DNS + ruleset</text>
   <text x="966" y="315" class="small" >HTTPS</text>
   <text x="48" y="470" class="small" >Workload NSG</text>
-  <text x="350" y="470" class="small" >Cross-premises path inspected both ways</text>
+  <text x="350" y="470" class="small" >Spoke workload path inspected both ways</text>
   <text x="782" y="470" class="small" >Private endpoint path stays separate</text>
   <text x="782" y="518" class="small" >Private Link + vault-scoped RBAC</text>
   <path d="M 32 533 H 76" class="traffic"/>
   <text x="90" y="538" class="small" >Selected application paths</text>
   <path d="M 32 567 H 76" class="dns"/>
-  <text x="90" y="572" class="small" >Logical DNS queries; cross-site requests use the tunnel</text>
+  <text x="90" y="572" class="small" >DNS: both cross-site legs use the VPN gateways and IPsec</text>
   <text x="32" y="615" class="small" >Overview of the completed lab. Administration, delivery, and internet egress are omitted.</text>
 </svg>

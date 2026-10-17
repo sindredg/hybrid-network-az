@@ -9,19 +9,20 @@ Private Resolver.
 
 ## How it fits together
 
-![Hybrid network overview: a simulated datacenter in Denmark East reaches a spoke in Sweden Central through two VPN gateways, an IPsec tunnel, the hub firewall, and VNet peering. The hub also provides hybrid DNS. The spoke reaches Key Vault through a private endpoint.](docs/diagrams/network-overview.svg)
+![Hybrid network overview: a simulated datacenter in Denmark East reaches a spoke in Sweden Central through two VPN gateways, an IPsec tunnel, the hub firewall, and VNet peering. Cross-site DNS uses the same gateways and IPsec tunnel, branching to the hub resolver. The spoke queries Azure-provided DNS and its forwarding ruleset. The spoke reaches Key Vault through a private endpoint.](docs/diagrams/network-overview.svg)
 
 The simulated datacenter is an Azure VNet in Denmark East. The hub and spoke are in Sweden Central.
 
 - **Connectivity and inspection:** the spoke borrows the hub's VPN gateway through peering.
-  User-defined routes on the spoke workload subnet and hub gateway subnet send cross-premises
-  traffic through Azure Firewall in both directions. The spoke's default route also uses the
-  firewall. Workload NSGs apply independently.
+  User-defined routes on the spoke workload subnet and hub gateway subnet send traffic between
+  spoke workloads and the simulated site through Azure Firewall in both directions. The spoke's
+  default route also uses the firewall. Workload NSGs apply independently.
 - **Private service access:** a private endpoint in the spoke connects to Key Vault with public
   network access disabled. Managed identity and vault-scoped RBAC authorize the spoke VM.
 - **Hybrid DNS:** the simulated site sends Azure private-name queries to the resolver's inbound
   endpoint. Azure forwards `corp.internal` queries through a ruleset and outbound endpoint to
-  `dnsmasq` at the simulated site.
+  `dnsmasq` at the simulated site. Both cross-site DNS legs use the VPN gateways and IPsec tunnel.
+  The hub resolver uses the gateway route; the firewall UDRs target the spoke workloads.
 - **Administration and delivery:** workload VMs have no public IPs. Administrators enter through
   Azure Bastion at the simulated site. GitHub Actions authenticates to Azure through OIDC;
   Terraform applies and destroys require manual workflow dispatch.
